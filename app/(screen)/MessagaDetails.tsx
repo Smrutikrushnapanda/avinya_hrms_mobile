@@ -2,6 +2,7 @@ import Header from "app/components/Header";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React from "react";
 import { StyleSheet, Text, View, useColorScheme } from "react-native";
+import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import { darkTheme, lightTheme } from "../constants/colors";
 
 const MessagaDetails = () => {
@@ -46,34 +47,37 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardWrapper: {
-    marginTop: -90,
-    paddingHorizontal: 20,
+    marginTop: verticalScale(-90),
+    paddingHorizontal: horizontalScale(20),
     zIndex: 10,
     flex: 1,
   },
   card: {
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: moderateScale(16),
+    padding: moderateScale(20),
     elevation: 2,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {
+      width: horizontalScale(0),
+      height: verticalScale(2),
+    },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowRadius: moderateScale(4),
     flex: 1,
   },
   statsContainer: {
-    marginTop: 10,
+    marginTop: verticalScale(10),
   },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
-    gap: 10,
+    marginBottom: verticalScale(16),
+    gap: horizontalScale(10),
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: moderateScale(48),
+    height: moderateScale(48),
+    borderRadius: moderateScale(24),
     backgroundColor: "#0077B6",
     justifyContent: "center",
     alignItems: "center",
@@ -81,29 +85,29 @@ const styles = StyleSheet.create({
   avatarText: {
     color: "#fff",
     fontWeight: "bold",
-    fontSize: 16,
+    fontSize: moderateScale(16),
   },
   title: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: "600",
     color: "#000",
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: "#666",
   },
   time: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     color: "#999",
   },
   messageBox: {
-    paddingTop: 10,
+    paddingTop: verticalScale(10),
     borderTopWidth: 1,
     borderTopColor: "#eee",
   },
   messageText: {
-    fontSize: 15,
+    fontSize: moderateScale(15),
     color: "#333",
-    lineHeight: 22,
+    lineHeight: moderateScale(22),
   },
 });

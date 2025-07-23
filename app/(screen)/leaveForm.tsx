@@ -9,6 +9,7 @@ import {
   View,
   useColorScheme,
 } from "react-native";
+import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import { darkTheme, lightTheme } from "../constants/colors";
 
 const LeaveForm = () => {
@@ -103,56 +104,56 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardWrapper: {
-    marginTop: -90,
-    paddingHorizontal: 20,
+    marginTop: verticalScale(-90),
+    paddingHorizontal: horizontalScale(20),
     zIndex: 10,
   },
   card: {
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: moderateScale(16),
+    padding: moderateScale(20),
     elevation: 2,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: verticalScale(2) },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowRadius: moderateScale(4),
   },
   statsContainer: {
-    marginTop: 10,
+    marginTop: verticalScale(10),
   },
   formHeader: {
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: verticalScale(20),
   },
   formTitle: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: "bold",
     color: "#0077B6",
-    marginTop: 4,
+    marginTop: verticalScale(4),
   },
   inputGroup: {
-    marginBottom: 16,
+    marginBottom: verticalScale(16),
   },
   label: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     color: "#333",
-    marginBottom: 6,
+    marginBottom: verticalScale(6),
   },
   pickerWrapper: {
     borderWidth: 1,
     borderColor: "#ccc",
-    borderRadius: 8,
+    borderRadius: moderateScale(8),
     backgroundColor: "#F1F8FB",
     overflow: "hidden",
   },
   picker: {
-    height: 50,
+    height: verticalScale(50),
     width: "100%",
   },
   dateInput: {
     borderWidth: 1,
     borderColor: "#ccc",
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: moderateScale(8),
+    padding: moderateScale(12),
     backgroundColor: "#F1F8FB",
   },
   placeholderText: {
@@ -161,10 +162,10 @@ const styles = StyleSheet.create({
   textArea: {
     borderWidth: 1,
     borderColor: "#ccc",
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: moderateScale(8),
+    padding: moderateScale(12),
     backgroundColor: "#F1F8FB",
-    height: 100,
+    height: verticalScale(100),
   },
   row: {
     flexDirection: "row",
@@ -172,16 +173,16 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     backgroundColor: "#0077B6",
-    paddingVertical: 14,
-    borderRadius: 8,
+    paddingVertical: verticalScale(14),
+    borderRadius: moderateScale(8),
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "center",
-    marginTop: 10,
+    marginTop: verticalScale(10),
   },
   submitButtonText: {
     color: "#fff",
     fontWeight: "bold",
-    fontSize: 14,
+    fontSize: moderateScale(14),
   },
 });

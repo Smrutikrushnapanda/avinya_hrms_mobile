@@ -3,6 +3,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React from "react";
 import { Appearance } from "react-native";
+import { AlertNotificationRoot } from 'react-native-alert-notification';
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 export default function RootLayout() {
@@ -10,8 +11,10 @@ export default function RootLayout() {
 
   // Force light mode
   Appearance.setColorScheme("light");
+  
 
   return (
+    <AlertNotificationRoot>
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar
@@ -28,5 +31,6 @@ export default function RootLayout() {
         />
       </SafeAreaProvider>
     </GestureHandlerRootView>
+    </AlertNotificationRoot>
   );
 }

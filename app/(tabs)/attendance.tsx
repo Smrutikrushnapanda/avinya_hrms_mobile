@@ -1,7 +1,10 @@
 import { FontAwesome } from "@expo/vector-icons";
 import Header from "app/components/Header";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,75 +12,393 @@ import {
   View,
   useColorScheme,
 } from "react-native";
+import { monthlyAttendance } from "../../api/api";
+import useAuthStore from "../../store/useUserStore";
+import {
+  horizontalScale,
+  moderateScale,
+  verticalScale,
+} from "../../utils/metrics";
 import { darkTheme, lightTheme } from "../constants/colors";
-
-// Sample attendance data with different statuses and dates
-const attendanceData = [
-  {
-    date: "Wed, Jan 15, 2025",
-    inTime: "09:00 AM",
-    outTime: "06:00 PM",
-    status: "present",
-  },
-  {
-    date: "Tue, Jan 14, 2025",
-    inTime: "10:30 AM",
-    outTime: "06:00 PM",
-    status: "late",
-  },
-  {
-    date: "Mon, Jan 13, 2025",
-    inTime: "09:00 AM",
-    outTime: "01:00 PM",
-    status: "halfday",
-  },
-  { date: "Sun, Jan 12, 2025", inTime: null, outTime: null, status: "absent" },
-  {
-    date: "Sat, Jan 11, 2025",
-    inTime: "09:00 AM",
-    outTime: "06:00 PM",
-    status: "present",
-  },
-  {
-    date: "Fri, Jan 10, 2025",
-    inTime: "09:15 AM",
-    outTime: "06:00 PM",
-    status: "late",
-  },
-  {
-    date: "Thu, Jan 09, 2025",
-    inTime: "09:00 AM",
-    outTime: "06:00 PM",
-    status: "present",
-  },
-  { date: "Wed, Jan 08, 2025", inTime: null, outTime: null, status: "absent" },
-];
 
 const Attendance = () => {
   const colorScheme = useColorScheme() ?? "light";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
+  const { user } = useAuthStore();
 
-  const [visibleItems, setVisibleItems] = useState(5); // Initially show 5 items
-  const [isComingSoon, setIsComingSoon] = useState(true); // Toggle this to show/hide overlay
+  const [attendanceData, setAttendanceData] = useState<any[]>([]);
+  const [displayedItems, setDisplayedItems] = useState<any[]>([]);
+  const [currentPage, setCurrentPage] = useState<number>(0);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
+  const [hasMoreData, setHasMoreData] = useState<boolean>(true);
+  const [totalWorkingDays, setTotalWorkingDays] = useState<number>(0);
+  const [employeeWorkingDays, setEmployeeWorkingDays] = useState<number>(0);
+  const [showMonthPicker, setShowMonthPicker] = useState<boolean>(false);
+
+  // Month and year state
+  const currentDate = new Date();
+  const [selectedMonth, setSelectedMonth] = useState<number>(
+    currentDate.getMonth() + 1
+  );
+  const [selectedYear, setSelectedYear] = useState<number>(
+    currentDate.getFullYear()
+  );
+
+  const ITEMS_PER_PAGE = 5;
+
+  // Month names for display
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+
+  // Generate only 2025
+  const generateYears = () => {
+    return [2025];
+  };
+
+  // Function to format date to "Day, Mon DD, YYYY" format
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: "short",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    };
+    return date.toLocaleDateString("en-US", options);
+  };
 
   // Function to get badge color and text based on status
-  const getBadgeProps = (status: string) => {
-    switch (status) {
+  const getBadgeProps = (status: string, isSunday: boolean) => {
+    if (isSunday) {
+      return { color: "#800094", text: "Sunday" };
+    }
+    switch (status?.toLowerCase()) {
       case "absent":
         return { color: "#FF4444", text: "Absent" };
       case "late":
-        return { color: "#FFBB33", text: "Late" };
+        return { color: "#FFBB33", text: "Half Day" };
       case "halfday":
+      case "half_day":
         return { color: "#00B8D9", text: "Half Day" };
+      case "present":
+        return { color: "#00C851", text: "Present" };
+      case "holiday":
+        return { color: "#9C27B0", text: "Holiday" };
       default:
-        return { color: "#00C851", text: "In Time" };
+        return { color: "#00C851", text: "Present" };
     }
   };
 
-  // Function to handle "Show More" button press
-  const handleShowMore = () => {
-    setVisibleItems((prev) => Math.min(prev + 3, attendanceData.length)); // Show 3 more items, up to max
+  // Function to sort attendance data - latest first, with priority for late entries
+  const sortAttendanceData = (data: any[]) => {
+    return data.sort((a, b) => {
+      const dateA = new Date(a.originalDate || a.date);
+      const dateB = new Date(b.originalDate || b.date);
+
+      // First sort by date (latest first)
+      const dateComparison = dateB.getTime() - dateA.getTime();
+
+      // If dates are the same, prioritize late entries
+      if (dateComparison === 0) {
+        const aIsLate = a.status?.toLowerCase() === "late";
+        const bIsLate = b.status?.toLowerCase() === "late";
+
+        if (aIsLate && !bIsLate) return -1;
+        if (!aIsLate && bIsLate) return 1;
+        return 0;
+      }
+
+      return dateComparison;
+    });
   };
+
+  // Calculate total working days from 1st to yesterday (excluding Sundays and mandatory holidays)
+  const calculateWorkingDays = (records: any[]) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const year = selectedYear;
+    const month = selectedMonth - 1; // JavaScript months are 0-indexed
+    const workingDays: Date[] = [];
+
+    // Get the last day of the selected month
+    const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+
+    // If it's current month, only count up to yesterday, otherwise count full month
+    const isCurrentMonth =
+      year === today.getFullYear() && month === today.getMonth();
+    const endDay = isCurrentMonth ? today.getDate() : lastDayOfMonth + 1;
+
+    for (let day = 1; day < endDay; day++) {
+      const date = new Date(year, month, day);
+      workingDays.push(date);
+    }
+
+    const actualWorkingDays = workingDays.filter((date) => {
+      const dateStr = date.toISOString().split("T")[0];
+      const match = records.find((r) => {
+        const recordDate = new Date(
+          r.originalDate || r.date || r.attendanceDate
+        );
+        return recordDate.toISOString().split("T")[0] === dateStr;
+      });
+
+      const isHoliday = match?.isHoliday;
+      const isOptionalHoliday = match?.isOptionalHoliday;
+      const isSunday = date.getDay() === 0;
+      return !isSunday && !(isHoliday && !isOptionalHoliday);
+    });
+
+    return actualWorkingDays.length;
+  };
+
+  // Function to load more items (lazy loading)
+  const loadMoreItems = useCallback(() => {
+    if (loadingMore || !hasMoreData) return;
+
+    setLoadingMore(true);
+
+    const startIndex = currentPage * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const newItems = attendanceData.slice(startIndex, endIndex);
+
+    setTimeout(() => {
+      if (newItems.length > 0) {
+        setDisplayedItems((prev) => [...prev, ...newItems]);
+        setCurrentPage((prev) => prev + 1);
+
+        // Check if there are more items to load
+        if (endIndex >= attendanceData.length) {
+          setHasMoreData(false);
+        }
+      } else {
+        setHasMoreData(false);
+      }
+      setLoadingMore(false);
+    }, 500); // Small delay to show loading state
+  }, [attendanceData, currentPage, loadingMore, hasMoreData]);
+
+  // Fetch attendance data
+  const fetchAttendanceData = async () => {
+    if (!user?.userId || !user?.organizationId) {
+      Alert.alert("Error", "User information not found");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await monthlyAttendance(
+        user.userId,
+        selectedMonth,
+        selectedYear,
+        user.organizationId
+      );
+
+      // Handle response - check if it's an array or object
+      let attendanceRecords = [];
+
+      if (Array.isArray(response.data)) {
+        attendanceRecords = response.data;
+      } else if (response.data && response.data.success && response.data.data) {
+        attendanceRecords = response.data.data;
+      } else if (response.data && Array.isArray(response.data.data)) {
+        attendanceRecords = response.data.data;
+      } else {
+        console.error("API response format unexpected:", response.data);
+        Alert.alert("Error", "Unexpected API response format");
+        return;
+      }
+
+      // Get current date for comparison (ignoring time)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Normalize to midnight for comparison
+
+      // Only filter out future dates if we're viewing the current month
+      const isCurrentMonth =
+        selectedYear === today.getFullYear() &&
+        selectedMonth === today.getMonth() + 1;
+
+      const filteredRecords = isCurrentMonth
+        ? attendanceRecords.filter((record: any) => {
+            const recordDate = new Date(record.date || record.attendanceDate);
+            recordDate.setHours(0, 0, 0, 0); // Normalize to midnight
+            return recordDate < today;
+          })
+        : attendanceRecords; // Show all records for past months
+
+      // Transform the data to match the expected format
+      const transformedData = filteredRecords.map((record: any) => ({
+        originalDate: record.date || record.attendanceDate,
+        date: formatDate(record.date || record.attendanceDate),
+        inTime: record.inTime || record.checkInTime || record.clockIn || null,
+        outTime:
+          record.outTime || record.checkOutTime || record.clockOut || null,
+        status: record.status || record.attendanceStatus || "present",
+        isHoliday: record.isHoliday || false,
+        isSunday: record.isSunday || false,
+        isOptionalHoliday: record.isOptionalHoliday || false,
+      }));
+
+      // Sort the data - latest first, with priority for late entries
+      const sortedData = sortAttendanceData(transformedData);
+      setAttendanceData(sortedData);
+
+      // Reset pagination state
+      setCurrentPage(0);
+      setDisplayedItems([]);
+      setHasMoreData(true);
+
+      // Load initial items
+      const initialItems = sortedData.slice(0, ITEMS_PER_PAGE);
+      setDisplayedItems(initialItems);
+      setCurrentPage(1);
+      setHasMoreData(sortedData.length > ITEMS_PER_PAGE);
+
+      // Calculate working days statistics
+      const presentDays = transformedData.filter(
+        (record: any) => record.status?.toLowerCase() === "present"
+      ).length;
+
+      const halfDays = transformedData.filter(
+        (record: any) =>
+          record.status?.toLowerCase() === "halfday" ||
+          record.status?.toLowerCase() === "half_day" ||
+          record.status?.toLowerCase() === "late"
+      ).length;
+
+      setEmployeeWorkingDays(presentDays + halfDays * 0.5);
+      setTotalWorkingDays(calculateWorkingDays(transformedData));
+    } catch (error) {
+      console.error("Error fetching attendance:", error);
+      Alert.alert(
+        "Error",
+        error.response?.data?.message || "Failed to fetch attendance"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch data on component mount and when month/year changes
+  useEffect(() => {
+    fetchAttendanceData();
+  }, [user?.userId, user?.organizationId, selectedMonth, selectedYear]);
+
+  // Function to handle refresh
+  const handleRefresh = () => {
+    setCurrentPage(0);
+    setDisplayedItems([]);
+    setHasMoreData(true);
+    fetchAttendanceData();
+  };
+
+  // Handle month selection
+  const handleMonthYearSelect = (month: number, year: number) => {
+    setSelectedMonth(month);
+    setSelectedYear(year);
+    setShowMonthPicker(false);
+  };
+
+  // Month Picker Modal Component
+  const MonthPickerModal = () => (
+    <Modal
+      visible={showMonthPicker}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowMonthPicker(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View
+          style={[styles.modalContainer, { backgroundColor: colors.white }]}
+        >
+          <View style={styles.modalHeader}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              Select Month & Year
+            </Text>
+            <TouchableOpacity
+              onPress={() => setShowMonthPicker(false)}
+              style={styles.closeButton}
+            >
+              <FontAwesome name="times" size={20} color="#666" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            {generateYears().map((year) => (
+              <View key={year} style={styles.yearSection}>
+                <Text style={[styles.yearTitle, { color: colors.text }]}>
+                  {year}
+                </Text>
+                <View style={styles.monthGrid}>
+                  {monthNames.map((monthName, index) => {
+                    const monthNumber = index + 1;
+                    const isSelected =
+                      selectedMonth === monthNumber && selectedYear === year;
+                    const isFutureMonth =
+                      year === currentDate.getFullYear() &&
+                      monthNumber > currentDate.getMonth() + 1;
+
+                    return (
+                      <TouchableOpacity
+                        key={monthNumber}
+                        style={[
+                          styles.monthButton,
+                          isSelected && styles.selectedMonthButton,
+                          isFutureMonth && styles.disabledMonthButton,
+                        ]}
+                        onPress={() =>
+                          !isFutureMonth &&
+                          handleMonthYearSelect(monthNumber, year)
+                        }
+                        disabled={isFutureMonth}
+                      >
+                        <Text
+                          style={[
+                            styles.monthButtonText,
+                            isSelected && styles.selectedMonthButtonText,
+                            isFutureMonth && styles.disabledMonthButtonText,
+                          ]}
+                        >
+                          {monthName.substring(0, 3)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Header title="Attendance" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#035F91" />
+          <Text style={[styles.loadingText, { color: colors.text }]}>
+            Loading attendance data...
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -98,7 +419,7 @@ const Attendance = () => {
                       Total working days of this month
                     </Text>
                   </View>
-                  <Text style={styles.valueText}>30</Text>
+                  <Text style={styles.valueText}>{totalWorkingDays}</Text>
                 </View>
               </View>
 
@@ -116,104 +437,184 @@ const Attendance = () => {
                       Employee Working Days
                     </Text>
                   </View>
-                  <Text style={styles.valueText}>27</Text>
+                  <Text style={styles.valueText}>{employeeWorkingDays}</Text>
                 </View>
               </View>
             </View>
+
+            {/* Refresh Button */}
+            <TouchableOpacity
+              style={styles.refreshButton}
+              onPress={handleRefresh}
+            >
+              <FontAwesome name="refresh" size={16} color="#035F91" />
+              <Text style={styles.refreshText}>Refresh</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.activities}>
-            <Text style={[styles.sectionDetails, { color: colors.text }]}>
-              Your activity
-            </Text>
-            {/* Independent ScrollView for activity section */}
-            <ScrollView
-              style={styles.activityScroll}
-              contentContainerStyle={{ paddingBottom: 20 }}
-              nestedScrollEnabled
-            >
-              {attendanceData.slice(0, visibleItems).map((item, index) => {
-                const { color: badgeColor, text: badgeText } = getBadgeProps(
-                  item.status
-                );
-                return (
-                  <View key={index} style={styles.attendanceCard}>
-                    {/* Header Ribbon */}
+            {/* Header with Filter */}
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionDetails, { color: colors.text }]}>
+                Attendance History
+              </Text>
+              <TouchableOpacity
+                style={styles.filterButton}
+                onPress={() => setShowMonthPicker(true)}
+              >
+                <FontAwesome name="calendar" size={16} color="#035F91" />
+                <Text style={styles.filterButtonText}>
+                  {monthNames[selectedMonth - 1]} {selectedYear}
+                </Text>
+                <FontAwesome name="chevron-down" size={12} color="#035F91" />
+              </TouchableOpacity>
+            </View>
+
+            {attendanceData.length === 0 ? (
+              <View style={styles.noDataContainer}>
+                <FontAwesome name="calendar-times-o" size={48} color="#ccc" />
+                <Text style={[styles.noDataText, { color: colors.text }]}>
+                  No attendance data found for {monthNames[selectedMonth - 1]}{" "}
+                  {selectedYear}
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                style={styles.activityScroll}
+                contentContainerStyle={{ paddingBottom: 20 }}
+                nestedScrollEnabled
+              >
+                {displayedItems.map((item: any, index: number) => {
+                  const { color: badgeColor, text: badgeText } = getBadgeProps(
+                    item.status,
+                    item.isSunday
+                  );
+
+                  const isNonWorkingDay = item.isHoliday || item.isSunday;
+                  const isLate = item.status?.toLowerCase() === "late";
+
+                  return (
                     <View
-                      style={[styles.ribbon, { backgroundColor: badgeColor }]}
+                      key={`${item.originalDate}-${index}`}
+                      style={[
+                        styles.attendanceCard,
+                        { borderLeftColor: badgeColor },
+                      ]}
                     >
-                      <Text style={styles.ribbonText}>{badgeText}</Text>
-                    </View>
-
-                    {/* Left Icon + Date */}
-                    <View style={styles.leftSection}>
-                      <View style={styles.iconCircle}>
-                        <FontAwesome
-                          name="calendar"
-                          size={16}
-                          color="#035F91"
-                        />
+                      {/* Header Ribbon */}
+                      <View
+                        style={[styles.ribbon, { backgroundColor: badgeColor }]}
+                      >
+                        <Text style={styles.ribbonText}>
+                          {item.isHoliday
+                            ? "Holiday"
+                            : item.isSunday
+                            ? "Sunday"
+                            : badgeText}
+                        </Text>
                       </View>
-                      <Text style={styles.dateText}>{item.date}</Text>
-                    </View>
 
-                    {/* In/Out Times */}
-                    <View style={styles.rightSection}>
-                      {item.inTime ? (
-                        <View style={styles.timeRow}>
-                          <FontAwesome name="clock-o" size={14} color="#999" />
-                          <Text style={styles.timeText}>In: {item.inTime}</Text>
+                      {/* Date Section */}
+                      <View style={styles.dateSection}>
+                        <View
+                          style={[
+                            styles.iconCircle,
+                            isNonWorkingDay && styles.nonWorkingDayIcon,
+                            isLate && styles.lateIcon,
+                          ]}
+                        >
+                          <FontAwesome
+                            name={
+                              item.isHoliday
+                                ? "gift"
+                                : item.isSunday
+                                ? "sun-o"
+                                : isLate
+                                ? "clock-o"
+                                : "calendar"
+                            }
+                            size={16}
+                            color={
+                              isNonWorkingDay
+                                ? "#800094"
+                                : isLate
+                                ? "#FFBB33"
+                                : "#035F91"
+                            }
+                          />
                         </View>
-                      ) : (
-                        <View style={styles.timeRow}>
-                          <FontAwesome name="clock-o" size={14} color="#999" />
-                          <Text style={styles.timeText}>In: --</Text>
-                        </View>
-                      )}
-                      {item.outTime ? (
+                        <Text
+                          style={[
+                            styles.dateText,
+                            isNonWorkingDay && styles.nonWorkingDayText,
+                            isLate && styles.lateText,
+                          ]}
+                        >
+                          {item.date}
+                        </Text>
+                      </View>
+
+                      {/* Time Section */}
+                      <View style={styles.timeSection}>
                         <View style={styles.timeRow}>
                           <FontAwesome name="clock-o" size={14} color="#999" />
                           <Text style={styles.timeText}>
-                            Out: {item.outTime}
+                            In: {item.inTime || "--"}
+                          </Text>
+                          <View style={styles.timeSeparator} />
+                          <FontAwesome name="clock-o" size={14} color="#999" />
+                          <Text style={styles.timeText}>
+                            Out: {item.outTime || "--"}
                           </Text>
                         </View>
-                      ) : (
-                        <View style={styles.timeRow}>
-                          <FontAwesome name="clock-o" size={14} color="#999" />
-                          <Text style={styles.timeText}>Out: --</Text>
-                        </View>
-                      )}
+                      </View>
                     </View>
+                  );
+                })}
+
+                {/* Load More Button */}
+                {hasMoreData && (
+                  <TouchableOpacity
+                    style={styles.loadMoreButton}
+                    onPress={loadMoreItems}
+                    disabled={loadingMore}
+                  >
+                    {loadingMore ? (
+                      <View style={styles.loadingMoreContainer}>
+                        <ActivityIndicator size="small" color="#026D94" />
+                        <Text style={styles.loadingMoreText}>
+                          Loading more...
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.loadMoreContainer}>
+                        <FontAwesome
+                          name="angle-down"
+                          size={18}
+                          color="#026D94"
+                        />
+                        <Text style={styles.loadMoreText}>Load More</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                )}
+
+                {/* End of list indicator */}
+                {!hasMoreData && displayedItems.length > 0 && (
+                  <View style={styles.endOfListContainer}>
+                    <Text style={styles.endOfListText}>
+                      You've reached the end of your attendance records
+                    </Text>
                   </View>
-                );
-              })}
-              {visibleItems < attendanceData.length && (
-                <TouchableOpacity
-                  style={styles.showMoreButton}
-                  onPress={handleShowMore}
-                >
-                  <Text style={styles.showMoreText}>
-                    <FontAwesome name="angle-down" size={18} color="#026D94" />
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </ScrollView>
+                )}
+              </ScrollView>
+            )}
           </View>
         </View>
       </ScrollView>
 
-      {/* Coming Soon Overlay */}
-      {isComingSoon && (
-        <View style={styles.overlay}>
-          <View style={styles.comingSoonContainer}>
-            <FontAwesome name="clock-o" size={60} color="#fff" />
-            <Text style={styles.comingSoonText}>Coming Soon</Text>
-            <Text style={styles.comingSoonSubtext}>
-              Attendance management feature is under development
-            </Text>
-          </View>
-        </View>
-      )}
+      {/* Month Picker Modal */}
+      <MonthPickerModal />
     </View>
   );
 };
@@ -223,34 +624,34 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardWrapper: {
-    marginTop: -90,
-    paddingHorizontal: 20,
+    marginTop: verticalScale(-90),
+    paddingHorizontal: horizontalScale(20),
     zIndex: 10,
   },
   card: {
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: moderateScale(16),
+    padding: moderateScale(20),
     elevation: 2,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: verticalScale(2) },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowRadius: moderateScale(4),
   },
   statsContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 20,
+    marginBottom: verticalScale(20),
   },
   cardinner: {
     width: "48%",
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: moderateScale(12),
+    padding: moderateScale(16),
     overflow: "hidden",
     elevation: 2,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: verticalScale(1) },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: moderateScale(4),
     position: "relative",
   },
   cardContentinner: {
@@ -258,160 +659,289 @@ const styles = StyleSheet.create({
   },
   circleDecoration: {
     position: "absolute",
-    bottom: -20,
-    right: -20,
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    bottom: verticalScale(-20),
+    right: horizontalScale(-20),
+    width: moderateScale(80),
+    height: moderateScale(80),
+    borderRadius: moderateScale(40),
     backgroundColor: "#C6F3FF",
     zIndex: 1,
   },
   labelRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: verticalScale(8),
   },
   dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 6,
+    width: moderateScale(10),
+    height: moderateScale(10),
+    borderRadius: moderateScale(5),
+    marginRight: horizontalScale(6),
   },
   labelText: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     flexShrink: 1,
-    minHeight: 50,
+    minHeight: verticalScale(50),
   },
   valueText: {
-    fontSize: 20,
+    fontSize: moderateScale(20),
     fontWeight: "bold",
     color: "#000",
   },
-  attendanceCard: {
+  refreshButton: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: verticalScale(8),
+    paddingHorizontal: horizontalScale(16),
+    backgroundColor: "#E1F4FF",
+    borderRadius: moderateScale(20),
+    alignSelf: "center",
+  },
+  refreshText: {
+    marginLeft: horizontalScale(8),
+    fontSize: moderateScale(14),
+    color: "#035F91",
+    fontWeight: "500",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingTop: verticalScale(100),
+  },
+  loadingText: {
+    marginTop: verticalScale(16),
+    fontSize: moderateScale(16),
+  },
+  noDataContainer: {
+    alignItems: "center",
+    paddingVertical: verticalScale(40),
+  },
+  noDataText: {
+    marginTop: verticalScale(16),
+    fontSize: moderateScale(16),
+    textAlign: "center",
+  },
+  attendanceCard: {
     backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 12,
+    borderRadius: moderateScale(12),
+    padding: moderateScale(12),
+    marginTop: verticalScale(12),
     elevation: 3,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: verticalScale(2) },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: moderateScale(4),
+    borderLeftWidth: 3,
   },
   sectionDetails: {
-    fontSize: 17,
+    fontSize: moderateScale(17),
     fontWeight: "800",
   },
   activities: {
-    marginTop: 20,
+    marginTop: verticalScale(20),
   },
   activityScroll: {
-    maxHeight: 400, // Adjust height as needed
+    maxHeight: verticalScale(400),
   },
   ribbon: {
     position: "absolute",
     top: 0,
     right: 0,
-    paddingHorizontal: 10,
-    paddingVertical: 2,
-    borderTopRightRadius: 12,
-    borderBottomLeftRadius: 8,
+    paddingHorizontal: horizontalScale(10),
+    paddingVertical: verticalScale(2),
+    borderTopRightRadius: moderateScale(12),
+    borderBottomLeftRadius: moderateScale(8),
   },
   ribbonText: {
     color: "#fff",
-    fontSize: 12,
+    fontSize: moderateScale(12),
     fontWeight: "600",
   },
-  leftSection: {
+  dateSection: {
     flexDirection: "row",
     alignItems: "center",
-    flex: 1.3,
+    marginBottom: verticalScale(8),
   },
   iconCircle: {
     backgroundColor: "#E1F4FF",
-    padding: 8,
+    padding: moderateScale(8),
     borderRadius: 50,
-    marginRight: 10,
+    marginRight: horizontalScale(10),
+  },
+  lateIcon: {
+    backgroundColor: "#FFF4E0",
+  },
+  nonWorkingDayIcon: {
+    backgroundColor: "#F3E5F5",
   },
   dateText: {
-    fontSize: 14,
-    fontWeight: "500",
+    fontSize: moderateScale(14),
+    fontWeight: "600",
     color: "#333",
   },
-  rightSection: {
-    flex: 1.2,
-    justifyContent: "center",
+  lateText: {
+    color: "#B8860B",
+    fontWeight: "600",
+  },
+  nonWorkingDayText: {
+    color: "#666",
+  },
+  timeSection: {
+    borderTopWidth: 1,
+    borderTopColor: "#eee",
+    paddingTop: verticalScale(8),
   },
   timeRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 2,
+    justifyContent: "flex-start",
+    gap:7
   },
   timeText: {
-    marginLeft: 6,
-    fontSize: 13,
+    marginLeft: horizontalScale(6),
+    marginRight: horizontalScale(12),
+    fontSize: moderateScale(13),
     color: "#333",
   },
-  showMoreButton: {
-    backgroundColor: "transparent",
-    marginTop: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
+  timeSeparator: {
+    width: 1,
+    height: moderateScale(14),
+    backgroundColor: "#999",
+    marginHorizontal: horizontalScale(8),
+  },
+  loadMoreButton: {
+    backgroundColor: "#E1F4FF",
+    marginTop: verticalScale(12),
+    paddingVertical: verticalScale(12),
+    borderRadius: moderateScale(8),
     alignItems: "center",
     justifyContent: "center",
   },
-  showMoreText: {
-    color: "#fff",
-    fontSize: 14,
+  loadMoreContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  loadMoreText: {
+    color: "#026D94",
+    fontSize: moderateScale(14),
+    fontWeight: "600",
+    marginLeft: horizontalScale(8),
+  },
+  loadingMoreContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  loadingMoreText: {
+    color: "#026D94",
+    fontSize: moderateScale(14),
+    fontWeight: "600",
+    marginLeft: horizontalScale(8),
+  },
+  endOfListContainer: {
+    alignItems: "center",
+    paddingVertical: verticalScale(20),
+  },
+  endOfListText: {
+    color: "#999",
+    fontSize: moderateScale(14),
+    fontStyle: "italic",
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: verticalScale(10),
+  },
+  filterButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#E1F4FF",
+    paddingHorizontal: horizontalScale(12),
+    paddingVertical: verticalScale(8),
+    borderRadius: moderateScale(20),
+    borderWidth: 1,
+    borderColor: "#035F91",
+  },
+  filterButtonText: {
+    color: "#035F91",
+    fontSize: moderateScale(13),
+    fontWeight: "500",
+    marginHorizontal: horizontalScale(6),
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContainer: {
+    width: "85%",
+    maxHeight: "70%",
+    borderRadius: moderateScale(16),
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: verticalScale(2) },
+    shadowOpacity: 0.25,
+    shadowRadius: moderateScale(4),
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: moderateScale(20),
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  modalTitle: {
+    fontSize: moderateScale(18),
     fontWeight: "600",
   },
-
-  // Coming Soon Overlay Styles
-  overlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.8)", // Semi-transparent black overlay
-    justifyContent: "center",
+  yearSection: {
+    marginBottom: verticalScale(20),
+  },
+  yearTitle: {
+    fontSize: moderateScale(16),
+    fontWeight: "600",
+    marginBottom: verticalScale(10),
+  },
+  monthGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  monthButton: {
+    width: "30%",
+    padding: moderateScale(10),
+    marginBottom: verticalScale(10),
+    borderRadius: moderateScale(8),
+    backgroundColor: "#f5f5f5",
     alignItems: "center",
-    zIndex: 1000, // High z-index to ensure it's on top
   },
-  comingSoonContainer: {
-    alignItems: "center",
-    padding: 30,
-    backgroundColor: "rgba(0, 0, 0, 0)",
-    borderRadius: 20,
+  selectedMonthButton: {
+    backgroundColor: "#035F91",
   },
-  comingSoonText: {
+  disabledMonthButton: {
+    backgroundColor: "#e0e0e0",
+    opacity: 0.6,
+  },
+  monthButtonText: {
+    fontSize: moderateScale(14),
+    color: "#333",
+  },
+  selectedMonthButtonText: {
     color: "#fff",
-    fontSize: 20,
-    fontWeight: "bold",
-    marginTop: 20,
-    textAlign: "center",
+    fontWeight: "600",
   },
-  comingSoonSubtext: {
-    color: "#ccc",
-    fontSize: 16,
-    marginTop: 10,
-    textAlign: "center",
+  disabledMonthButtonText: {
+    color: "#999",
   },
-  dismissButton: {
-    marginTop: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.3)",
+  modalContent: {
+    padding: 20,
   },
-  dismissButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "500",
+  closeButton: {
+    color: "red",
   },
 });
 

@@ -131,19 +131,19 @@ const HomeCalendar = () => {
 
       // Priority: Sunday > Holiday > Status
       if (record.isSunday) {
-        backgroundColor = "#026D94"; // Red for Sunday
+        backgroundColor = "#026D94"; // Blue for Sunday
       } else if (record.isHoliday) {
-        backgroundColor = "#9C27B0"; // Purple for holidays
+        backgroundColor = "#ffb4b4ff"; // Blue for holidays
       } else {
         switch (record.status) {
           case "present":
             backgroundColor = "#00C851"; // Green
             break;
           case "absent":
-            backgroundColor = "#ff4444"; // Red
+            backgroundColor = "#cb0101ff"; // Red
             break;
           case "half-day":
-            backgroundColor = "#FF8800"; // Orange
+            backgroundColor = "#e67b00ff"; // Orange
             break;
           case "pending":
             // Skip marking for pending status - let it appear as normal day
@@ -159,23 +159,6 @@ const HomeCalendar = () => {
         selectedColor: backgroundColor,
         selectedTextColor: "#ffffff",
       };
-
-      // Add "H" for optional holidays
-      if (record.isHoliday && record.isOptional) {
-        markedDate.customStyles = {
-          container: {
-            backgroundColor: backgroundColor,
-            borderRadius: 16,
-            position: "relative",
-          },
-          text: {
-            color: "#ffffff",
-            fontWeight: "bold",
-            fontSize: 12,
-          },
-        };
-        markedDate.customText = "H";
-      }
 
       marked[date] = markedDate;
     });
@@ -234,19 +217,42 @@ const HomeCalendar = () => {
             const isToday =
               date?.dateString === new Date().toISOString().split("T")[0];
 
+            // Determine holiday indicator text
+            let holidayIndicator = null;
+            if (dayData?.isHoliday) {
+              if (dayData?.isOptional) {
+                holidayIndicator = "RH"; // Optional holiday shows RH
+              } else {
+                holidayIndicator = "H"; // Normal holiday shows H
+              }
+            }
+
             return (
               <TouchableOpacity
                 onPress={() => onDayPress(date as DateData)}
                 style={[
                   styles.dayContainer,
-                  marking?.selected && {
-                    backgroundColor: marking.selectedColor,
+                  // Holiday design - blue background with primary color border
+                  dayData?.isHoliday && {
+                    backgroundColor: "transparent", // No fill
+                    borderWidth: 2,
+                    borderColor: "#045faaff", // Black border
                     borderRadius: 16,
                   },
+
+                  // Today design - light blur color with border
                   isToday &&
-                    !marking?.selected && {
+                    !dayData?.isHoliday && {
                       borderWidth: 2,
-                      borderColor: colors.primary,
+                      borderColor: "#919191ff",
+                      borderRadius: 16,
+                      backgroundColor: "#919191ff", // 20% opacity for light blur
+                    },
+                  // Other status markings (present, absent, etc.)
+                  marking?.selected &&
+                    !dayData?.isHoliday &&
+                    !isToday && {
+                      backgroundColor: marking.selectedColor,
                       borderRadius: 16,
                     },
                 ]}
@@ -255,23 +261,41 @@ const HomeCalendar = () => {
                   style={[
                     styles.dayText,
                     {
-                      color: marking?.selected
+                      color: dayData?.isHoliday
+                        ? "#ffffff" // White text for holidays with blue background
+                        : marking?.selected && !isToday
                         ? marking.selectedTextColor
                         : state === "disabled"
                         ? colors.grey
                         : colors.text,
                     },
+                    // Today text styling (only if not a holiday)
                     isToday &&
-                      !marking?.selected && {
-                        color: colors.primary,
+                      !dayData?.isHoliday && {
+                        color: "#fff",
                         fontWeight: "bold",
                       },
+                    // Holiday text styling
+                    dayData?.isHoliday && {
+                      color: "#006dacff", // White text for better contrast on blue background
+                      fontWeight: "bold",
+                    },
                   ]}
                 >
                   {date?.day}
                 </Text>
-                {dayData?.isHoliday && dayData?.isOptional && (
-                  <Text style={styles.holidayIndicator}>H</Text>
+                {holidayIndicator && (
+                  <Text
+                    style={[
+                      styles.holidayIndicator,
+                      {
+                        color: "#ffffff", // White text for holiday indicator
+                        backgroundColor: "rgba(0, 0, 0, 0.91)", // Light white background for better visibility
+                      },
+                    ]}
+                  >
+                    {holidayIndicator}
+                  </Text>
                 )}
               </TouchableOpacity>
             );
@@ -283,9 +307,13 @@ const HomeCalendar = () => {
       <Modal visible={showInfo} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalBox, { backgroundColor: colors.white }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              Legend
-            </Text>
+            <View style={styles.modalHeader}>
+  <Text style={[styles.modalTitle, { color: colors.text }]}>Legend</Text>
+  <TouchableOpacity onPress={() => setShowInfo(false)} style={styles.close}>
+    <Ionicons name="close" size={24} color={colors.white} />
+  </TouchableOpacity>
+</View>
+
 
             <View style={styles.legendItem}>
               <View
@@ -325,7 +353,7 @@ const HomeCalendar = () => {
 
             <View style={styles.legendItem}>
               <View
-                style={[styles.legendDot, { backgroundColor: "#9C27B0" }]}
+                style={[styles.legendDot, { backgroundColor: "#2196F3" }]}
               />
               <Text style={[styles.legendText, { color: colors.text }]}>
                 Holiday
@@ -339,16 +367,16 @@ const HomeCalendar = () => {
                   { color: colors.text, fontWeight: "bold" },
                 ]}
               >
-                "H" indicates optional holiday
+                "RH" = Restricted Holiday, "H" = Holiday
               </Text>
             </View>
 
-            <TouchableOpacity
+            {/* <TouchableOpacity
               onPress={() => setShowInfo(false)}
               style={[styles.modalButton, { backgroundColor: colors.primary }]}
             >
               <Text style={styles.modalButtonText}>Close</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
         </View>
       </Modal>
@@ -357,9 +385,13 @@ const HomeCalendar = () => {
       <Modal visible={showHolidayModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalBox, { backgroundColor: colors.white }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              Holiday Information
-            </Text>
+            <View style={styles.modalHeader}>
+  <Text style={[styles.modalTitle, { color: colors.text }]}>Holiday Information</Text>
+  <TouchableOpacity onPress={() => setShowHolidayModal(false)} style={styles.close}>
+    <Ionicons name="close" size={24} color={colors.white} />
+  </TouchableOpacity>
+</View>
+
 
             <View style={styles.holidayInfo}>
               <Text style={[styles.holidayDate, { color: colors.text }]}>
@@ -368,19 +400,16 @@ const HomeCalendar = () => {
               <Text style={[styles.holidayName, { color: colors.primary }]}>
                 {selectedHoliday?.holidayName}
               </Text>
-              {selectedHoliday?.isOptional && (
+              {selectedHoliday?.isOptional ? (
                 <Text style={[styles.holidayType, { color: colors.text }]}>
-                  (Optional Holiday)
+                  (Restricted Holiday )
+                </Text>
+              ) : (
+                <Text style={[styles.holidayType, { color: colors.text }]}>
+                  (Holiday)
                 </Text>
               )}
             </View>
-
-            <TouchableOpacity
-              onPress={() => setShowHolidayModal(false)}
-              style={[styles.modalButton, { backgroundColor: colors.primary }]}
-            >
-              <Text style={styles.modalButtonText}>Close</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -428,17 +457,18 @@ const styles = StyleSheet.create({
   },
   holidayIndicator: {
     position: "absolute",
-    top: -2,
-    right: -2,
-    fontSize: 10,
+    top: -4,
+    right: -4,
+    fontSize: 8,
     fontWeight: "bold",
-    color: "#ffffff",
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
-    borderRadius: 8,
-    width: 14,
-    height: 14,
+    color: "#9C27B0",
+    backgroundColor: "rgba(22, 22, 22, 0.97)",
+    borderRadius: 6,
+    paddingHorizontal: 2,
+    paddingVertical: 1,
+    minWidth: 16,
     textAlign: "center",
-    lineHeight: 14,
+    lineHeight: 10,
   },
   modalOverlay: {
     flex: 1,
@@ -503,4 +533,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontStyle: "italic",
   },
+  modalHeader: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 10,
+},
+close:{
+  position:"relative",
+  bottom:20,
+  left:10,
+  backgroundColor:"red",
+  borderRadius:15
+}
 });

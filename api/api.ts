@@ -70,8 +70,11 @@ export const login = (data: { userName: string; password: string }) =>
 // ✅ Logout API - Invalidate the user's session/token
 export const logout = () => api.post("/auth/logout");
 
-// ✅ Profile API - Get the logged-in user's profile
-export const profile = () => api.get("/auth/profile");
+// ✅ Employee Profile API - Get employee details by user ID
+export const getEmployeeProfile = (userId: string) => {
+  console.log("Fetching profile for userId********************:", userId);
+  return api.get(`/employees/by-user/${userId}`);
+};
 
 //
 // 🕒 Attendance APIs

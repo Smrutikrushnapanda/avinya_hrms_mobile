@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Dimensions,
   Image,
@@ -21,7 +21,14 @@ const TabHeader = () => {
   const colors = isDarkMode ? darkTheme : lightTheme;
 
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user, fetchEmployeeProfile, loading, error } = useAuthStore();
+
+  // Fetch employee profile if profileImage or designation is missing
+  useEffect(() => {
+    if (user?.userId && (!user.profileImage || !user.designation)) {
+      fetchEmployeeProfile(user.userId);
+    }
+  }, [user, fetchEmployeeProfile]);
 
   // Create full name from user data
   const fullName = user
@@ -52,21 +59,27 @@ const TabHeader = () => {
                 }}
                 style={styles.headerProfileImage}
               />
-              <View style={styles.headerStatusIndicator} />
             </View>
             <View style={styles.textSection}>
-              <Text style={[styles.name, { color: colors.white }]}>
-                {fullName}
-              </Text>
-              <Text style={[styles.title, { color: colors.white }]}>
-                {user?.designation || "Employee"}
-              </Text>
+              {loading ? (
+                <Text style={[styles.name, { color: colors.white }]}>Loading...</Text>
+              ) : error ? (
+                <Text style={[styles.name, { color: colors.white }]}>Error</Text>
+              ) : (
+                <>
+                  <Text style={[styles.name, { color: colors.white }]}>
+                    {fullName}
+                  </Text>
+                  <Text style={[styles.title, { color: colors.white }]}>
+                    {user?.designation || "Employee"}
+                  </Text>
+                </>
+              )}
             </View>
           </TouchableOpacity>
 
           <View style={styles.rightSection}>
-
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.notificationButton}
               onPress={handleNotificationPress}
             >
@@ -79,28 +92,18 @@ const TabHeader = () => {
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* Welcome message */}
-        <View style={styles.welcomeSection}>
-          <Text style={[styles.welcomeText, { color: colors.white }]}>
-            Welcome back, {user?.firstName || "User"}! 👋
-          </Text>
-          <Text style={[styles.subtitleText, { color: colors.white }]}>
-            Have a productive day at work
-          </Text>
-        </View>
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  headerContainer: { 
+  headerContainer: {
     backgroundColor: "#1e7ba8",
-    paddingBottom: 20,
+    paddingBottom: 110,
   },
-  header: { 
-    paddingTop: 60, 
+  header: {
+    paddingTop: 50,
     paddingHorizontal: 20,
   },
   headerContent: {
@@ -109,9 +112,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  profileSection: { 
-    flexDirection: "row", 
-    alignItems: "center", 
+  profileSection: {
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
   },
   headerProfileContainer: {
@@ -125,30 +128,19 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.3)",
   },
-  headerStatusIndicator: {
-    position: "absolute",
-    bottom: 2,
-    right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: "#4CAF50",
-    borderWidth: 2,
-    borderColor: "#fff",
+  textSection: {
+    flex: 1,
   },
-  textSection: { 
-    flex: 1 
+  name: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "white",
+    marginBottom: 2,
   },
-  name: { 
-    fontSize: 18, 
-    fontWeight: "600", 
-    color: "white", 
-    marginBottom: 2 
-  },
-  title: { 
-    fontSize: 14, 
-    color: "rgba(255,255,255,0.8)", 
-    fontWeight: "400" 
+  title: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.8)",
+    fontWeight: "400",
   },
   rightSection: {
     flexDirection: "row",

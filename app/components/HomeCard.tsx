@@ -14,6 +14,7 @@ interface HomeCardProps {
   currentDate: string;
   formattedTime: string;
   timePeriod: string;
+  userName: string; // Add this prop
   punchInTime: string | null;
   lastPunch: string | null;
   isCheckedIn: boolean;
@@ -33,6 +34,7 @@ const HomeCard = ({
   currentDate,
   formattedTime,
   timePeriod,
+  userName, // Add this parameter
   punchInTime,
   lastPunch,
   isCheckedIn,
@@ -50,6 +52,22 @@ const HomeCard = ({
   const colorScheme = useColorScheme() ?? "light";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
 
+  // Function to get greeting based on time period
+  const getGreeting = (period: string) => {
+    switch (period.toLowerCase()) {
+      case 'morning':
+        return 'Good Morning';
+      case 'afternoon':
+        return 'Good Afternoon';
+      case 'evening':
+        return 'Good Evening';
+      case 'night':
+        return 'Good Night';
+      default:
+        return 'Hello';
+    }
+  };
+
   // Determine button text, handler, and color based on punchInTime
   const buttonText = punchInTime !== null ? "Punch Out" : "Punch In";
   const buttonHandler = punchInTime !== null ? handleCheckOut : handleCheckIn;
@@ -61,15 +79,14 @@ const HomeCard = ({
         <View style={styles.cardContent}>
           <View style={styles.leftSection}>
             <View>
+              {/* <Text style={[styles.greetingText, { color: colors.text }]}>
+                
+              </Text> */}
               <Text style={[styles.dateText, { color: colors.text }]}>
                 {currentDate}
               </Text>
               <Text style={[styles.subText, { color: colors.grey }]}>
-                {isCheckedIn
-                  ? "You are checked in"
-                  : punchInTime
-                  ? `Last check-in: ${formatTime(punchInTime)}`
-                  : "No check-in today"}
+                👋{getGreeting(timePeriod)} {userName}
               </Text>
             </View>
           </View>
@@ -183,7 +200,7 @@ export default HomeCard;
 
 const styles = StyleSheet.create({
   cardWrapper: {
-    marginTop: -70,
+    marginTop: -100,
     paddingHorizontal: 20,
     zIndex: 10,
   },
@@ -209,10 +226,17 @@ const styles = StyleSheet.create({
   rightSection: {
     alignItems: "flex-end",
   },
-  dateText: {
-    fontSize: 16,
+  greetingText: {
+    fontSize: 18,
     fontWeight: "800",
     color: "#1e7ba8",
+    marginBottom: 4,
+  },
+  dateText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#1e7ba8",
+    marginBottom: 2,
   },
   subText: {
     fontSize: 13,
@@ -220,7 +244,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   timeText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
     color: "#1e7ba8",
   },

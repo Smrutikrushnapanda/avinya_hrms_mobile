@@ -2,14 +2,16 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import NetInfo from "@react-native-community/netinfo";
 import HomeCalendar from "app/components/HomeCalender";
 import UpcomingHoliday from "app/components/UpcomingHoliday";
-import { CameraView } from "expo-camera";
+import { Camera, CameraView } from "expo-camera";
 import * as Location from "expo-location";
 import * as Network from "expo-network";
-import { useNavigation, useRouter } from "expo-router";
+import { useFocusEffect, useNavigation, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
+  Image,
   Platform,
   RefreshControl,
   ScrollView,
@@ -20,14 +22,16 @@ import {
   useColorScheme,
 } from "react-native";
 import WifiManager from "react-native-wifi-reborn";
+import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import { logAttendance, todayLogs } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
+import CustomDialog from "../components/CustomDialog";
 import HomeCard from "../components/HomeCard";
 import TabHeader from "../components/TabHeader";
 import { darkTheme, lightTheme } from "../constants/colors";
 
 const Index = () => {
-  const colorScheme = useColorScheme() ?? "light";
+  const colorScheme = useColorScheme() || "light";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
 
   const route = useRouter();
@@ -43,6 +47,7 @@ const Index = () => {
   const [showInfo, setShowInfo] = useState(false);
   const [isWifiValid, setIsWifiValid] = useState(false);
   const [isLocationValid, setIsLocationValid] = useState(false);
+  const [cameraPermission, setCameraPermission] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [attendanceLogs, setAttendanceLogs] = useState([]);
@@ -57,11 +62,32 @@ const Index = () => {
   });
   const [isLoadingWifi, setIsLoadingWifi] = useState(true);
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
+  const [initialCheckComplete, setInitialCheckComplete] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  // State for CustomDialog
+  const [dialogVisible, setDialogVisible] = useState(false);
+  const [dialogType, setDialogType] = useState("INFO");
+  const [dialogTitle, setDialogTitle] = useState("");
+  const [dialogMessage, setDialogMessage] = useState("");
+  const [dialogOnConfirm, setDialogOnConfirm] = useState(() => () => {});
 
   const orgId = user?.organizationId;
   const userId = user?.userId;
 
-  // Function to get public IP address
+  // Function to show dialog
+  const showDialog = (
+    type,
+    title,
+    message,
+    onConfirm = () => setDialogVisible(false)
+  ) => {
+    setDialogType(type);
+    setDialogTitle(title);
+    setDialogMessage(message);
+    setDialogOnConfirm(() => onConfirm);
+    setDialogVisible(true);
+  };
+
   const getPublicIP = async () => {
     try {
       console.log("🌐 Fetching public IP...");
@@ -98,7 +124,6 @@ const Index = () => {
     }
   };
 
-  // Function to get WiFi SSID and IP
   const getWifiDetails = async (showAlerts: boolean = false) => {
     try {
       console.log("📡 Starting WiFi detection...");
@@ -111,7 +136,8 @@ const Index = () => {
       ) {
         console.log("🚫 Not connected to Wi-Fi");
         if (showAlerts) {
-          Alert.alert(
+          showDialog(
+            "DANGER",
             "WiFi Required",
             "Please connect to the office WiFi network to mark attendance."
           );
@@ -171,8 +197,9 @@ const Index = () => {
       if (!deviceIP) {
         console.log("❌ No IP address available");
         if (showAlerts) {
-          Alert.alert(
-            "WiFi Required",
+          showDialog(
+            "DANGER",
+            "WiFi Error",
             "Please connect to the office WiFi network to mark attendance."
           );
         }
@@ -188,8 +215,9 @@ const Index = () => {
       if (!ssid) {
         console.log("❌ Could not retrieve WiFi SSID");
         if (showAlerts) {
-          Alert.alert(
-            "WiFi Required",
+          showDialog(
+            "DANGER",
+            "WiFi Error",
             "Please connect to the office WiFi network to mark attendance."
           );
         }
@@ -215,7 +243,8 @@ const Index = () => {
     } catch (error) {
       console.error("❌ WiFi detection error:", error);
       if (showAlerts) {
-        Alert.alert(
+        showDialog(
+          "DANGER",
           "WiFi Error",
           "Failed to detect WiFi. Please ensure you're connected to the office WiFi."
         );
@@ -224,7 +253,117 @@ const Index = () => {
     }
   };
 
-  // Function to fetch attendance logs
+  const checkAndRequestCameraPermission = async () => {
+    try {
+      console.log("🎥 Checking camera permission status...");
+      const { status: currentStatus } =
+        await Camera.getCameraPermissionsAsync();
+      console.log("📋 Current permission status:", currentStatus);
+
+      if (currentStatus === "granted") {
+        console.log("✅ Camera permission already granted");
+        setCameraPermission("granted");
+        return true;
+      }
+
+      if (currentStatus === "denied") {
+        console.log(
+          "❌ Camera permission was previously denied - requesting again..."
+        );
+        const { status: retryStatus } =
+          await Camera.requestCameraPermissionsAsync();
+        console.log("🔄 Retry permission request result:", retryStatus);
+
+        setCameraPermission(retryStatus);
+
+        if (retryStatus === "granted") {
+          console.log("🎉 Camera permission granted on retry!");
+          return true;
+        } else {
+          showDialog(
+            "DANGER",
+            "Camera Permission Required",
+            "Camera access is needed to take attendance photos. Please allow camera permission to continue.",
+            async () => {
+              const { status: finalStatus } =
+                await Camera.requestCameraPermissionsAsync();
+              if (finalStatus === "granted") {
+                setCameraPermission("granted");
+                return true;
+              } else {
+                showDialog(
+                  "DANGER",
+                  "Permission Needed",
+                  "Camera permission is required for attendance. You can enable it in your device settings."
+                );
+                return false;
+              }
+            }
+          );
+          return false;
+        }
+      }
+
+      if (currentStatus === "undetermined") {
+        console.log("📱 Requesting camera permission for the first time...");
+        const { status: newStatus } =
+          await Camera.requestCameraPermissionsAsync();
+        console.log("✅ Permission request result:", newStatus);
+
+        setCameraPermission(newStatus);
+
+        if (newStatus === "granted") {
+          console.log("🎉 Camera permission granted!");
+          return true;
+        } else if (newStatus === "denied") {
+          showDialog(
+            "DANGER",
+            "Camera Permission Required",
+            "Camera access is needed to take attendance photos. Please allow camera permission to continue.",
+            async () => {
+              const { status: retryStatus } =
+                await Camera.requestCameraPermissionsAsync();
+              setCameraPermission(retryStatus);
+              if (retryStatus !== "granted") {
+                showDialog(
+                  "DANGER",
+                  "Permission Required",
+                  "Camera access is required for attendance photos."
+                );
+              }
+              return retryStatus === "granted";
+            }
+          );
+          return false;
+        }
+      }
+
+      console.log("⚠️ Unexpected permission status:", currentStatus);
+      const { status: fallbackStatus } =
+        await Camera.requestCameraPermissionsAsync();
+      setCameraPermission(fallbackStatus);
+      return fallbackStatus === "granted";
+    } catch (error) {
+      console.error("❌ Camera permission error:", error);
+      showDialog(
+        "DANGER",
+        "Permission Error",
+        "Unable to request camera permission. Please try again.",
+        async () => {
+          try {
+            const { status } = await Camera.requestCameraPermissionsAsync();
+            setCameraPermission(status);
+            return status === "granted";
+          } catch (retryError) {
+            console.error("Retry permission error:", retryError);
+            return false;
+          }
+        }
+      );
+      return false;
+    }
+  };
+
   const fetchAttendanceLogs = async () => {
     try {
       console.log(
@@ -241,7 +380,6 @@ const Index = () => {
         setPunchInTime(response.data.punchInTime);
         setLastPunch(response.data.lastPunch);
 
-        // Determine check-in status based on punchInTime and logs
         const today = new Date().toISOString().split("T")[0];
         const hasCheckInToday =
           response.data.punchInTime &&
@@ -253,47 +391,43 @@ const Index = () => {
             new Date(log.timestamp).toISOString().split("T")[0] === today
         );
 
-        // User is checked in if punchInTime exists for today and no check-out today
         const isCurrentlyCheckedIn = hasCheckInToday && !hasCheckOutToday;
         setIsCheckedIn(isCurrentlyCheckedIn);
         console.log("🔄 isCheckedIn set to:", isCurrentlyCheckedIn);
       } else {
         console.warn("⚠️ No logs found in response:", response.data);
-        setIsCheckedIn(false);
-        setPunchInTime(null);
-        setLastPunch(null);
       }
     } catch (error) {
       console.error("❌ Failed to fetch attendance logs:", error);
-      setIsCheckedIn(false);
-      setPunchInTime(null);
-      setLastPunch(null);
-      Alert.alert(
-        "Error",
-        "Failed to fetch attendance logs. Please try again."
+      showDialog(
+        "INFO",
+        "Network Issue",
+        "Activity data will be fetched when mobile data is available."
       );
     }
   };
 
-  // Initial WiFi and Location load on component mount
   useEffect(() => {
     const fetchInitialData = async () => {
+      if (initialCheckComplete) return;
+
       setIsLoadingWifi(true);
       setIsLoadingLocation(true);
       console.log("🕓 Fetching initial data...");
+
+      try {
+        await fetchAttendanceLogs();
+      } catch (error) {
+        console.error("❌ Initial attendance fetch error:", error);
+      }
 
       try {
         const wifiData = await getWifiDetails(false);
         console.log("📥 Initial WiFi Data:", wifiData);
         setWifiInfo(wifiData);
         setIsWifiValid(wifiData.isValid);
-
-        const isLocationSuccess = await checkLocation();
-        setIsLocationValid(isLocationSuccess);
-
-        await fetchAttendanceLogs();
       } catch (error) {
-        console.error("❌ Initial data fetch error:", error);
+        console.error("❌ Initial WiFi check error:", error);
         setWifiInfo({
           ssid: "",
           bssid: "",
@@ -302,17 +436,24 @@ const Index = () => {
           isValid: false,
         });
         setIsWifiValid(false);
-        setIsLocationValid(false);
-      } finally {
-        setIsLoadingWifi(false);
-        setIsLoadingLocation(false);
       }
+
+      try {
+        const isLocationSuccess = await checkLocation();
+        setIsLocationValid(isLocationSuccess);
+      } catch (error) {
+        console.error("❌ Initial location check error:", error);
+        setIsLocationValid(false);
+      }
+
+      setIsLoadingWifi(false);
+      setIsLoadingLocation(false);
+      setInitialCheckComplete(true);
     };
 
     fetchInitialData();
   }, []);
 
-  // Check Wi-Fi connection
   const checkWifi = async (showAlerts: boolean = false) => {
     setIsLoadingWifi(true);
     try {
@@ -337,13 +478,17 @@ const Index = () => {
     }
   };
 
-  // Check device location
   const checkLocation = async () => {
     setIsLoadingLocation(true);
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         setIsLocationValid(false);
+        showDialog(
+          "DANGER",
+          "Location Permission Required",
+          "Location permission is needed to mark attendance. Please enable location services."
+        );
         return false;
       }
 
@@ -356,56 +501,114 @@ const Index = () => {
     } catch (error) {
       console.error("Location check error:", error);
       setIsLocationValid(false);
+      showDialog(
+        "DANGER",
+        "Location Error",
+        "Unable to retrieve location. Please ensure location services are enabled."
+      );
       return false;
     } finally {
       setIsLoadingLocation(false);
     }
   };
 
-  // Retry Wi-Fi connection
   const handleRetryWifi = async () => {
-    await checkWifi(true);
+    try {
+      setIsLoadingWifi(true);
+      const wifiData = await getWifiDetails(true);
+      setWifiInfo(wifiData);
+      setIsWifiValid(wifiData.isValid);
+
+      await fetchAttendanceLogs();
+    } catch (error) {
+      console.error("WiFi retry error:", error);
+      try {
+        await fetchAttendanceLogs();
+      } catch (dataError) {
+        console.error(
+          "Attendance data fetch error during WiFi retry:",
+          dataError
+        );
+      }
+    } finally {
+      setIsLoadingWifi(false);
+    }
   };
 
-  // Retry Location fetch
   const handleRetryLocation = async () => {
-    await checkLocation();
+    try {
+      setIsLoadingLocation(true);
+      const isLocationSuccess = await checkLocation();
+      setIsLocationValid(isLocationSuccess);
+
+      await fetchAttendanceLogs();
+    } catch (error) {
+      console.error("Location retry error:", error);
+      try {
+        await fetchAttendanceLogs();
+      } catch (dataError) {
+        console.error(
+          "Attendance data fetch error during location retry:",
+          dataError
+        );
+      }
+    } finally {
+      setIsLoadingLocation(false);
+    }
   };
 
-  // Refresh handler for location
   const onRefresh = async () => {
-    if (!isLocationValid) {
-      setRefreshing(true);
-      await checkLocation();
+    setRefreshing(true);
+    try {
+      await fetchAttendanceLogs();
+      if (!isLocationValid) {
+        await checkLocation();
+      }
+    } catch (error) {
+      console.error("Refresh error:", error);
+    } finally {
       setRefreshing(false);
     }
   };
 
-  // Run Wi-Fi and location checks periodically
   useEffect(() => {
     const interval = setInterval(() => {
-      checkWifi(false);
-      checkLocation();
+      fetchAttendanceLogs().catch((error) => {
+        console.log("Periodic attendance refresh failed:", error);
+      });
     }, 30000);
 
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTime(new Date());
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      navigation.setOptions({
+        tabBarStyle: {
+          display: showCamera || previewImage ? "none" : "flex",
+        },
+      });
 
-  // Hide bottom tabs when camera is open
-  useEffect(() => {
-    navigation.setOptions({
-      tabBarStyle: {
-        display: showCamera ? "none" : "flex",
-      },
-    });
-  }, [showCamera, navigation]);
+      const backHandler = BackHandler.addEventListener(
+        "hardwareBackPress",
+        () => {
+          if (showCamera || previewImage) {
+            if (previewImage) {
+              setPreviewImage(null);
+              setShowCamera(true); // Return to camera instead of closing
+            } else {
+              setShowCamera(false);
+              setCheckoutMode(false);
+            }
+            return true;
+          }
+          return false;
+        }
+      );
+
+      return () => backHandler.remove();
+    }, [showCamera, previewImage, navigation, route])
+  );
 
   const getTimePeriod = (hour: number) => {
     if (hour >= 5 && hour < 12) return "Morning";
@@ -414,10 +617,13 @@ const Index = () => {
     return "Night";
   };
 
-  const formattedTime = time.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const formattedTime = time
+    .toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    })
+    .toUpperCase();
 
   const currentDate = time.toLocaleDateString("en-US", {
     weekday: "long",
@@ -429,23 +635,47 @@ const Index = () => {
   const timePeriod = getTimePeriod(time.getHours());
 
   const handleCheckIn = async () => {
-    const isWifiConnected = await checkWifi(true);
-    if (!isWifiConnected) {
-      return;
+    try {
+      const isWifiConnected = await checkWifi(true);
+      if (!isWifiConnected) {
+        return;
+      }
+
+      const hasCameraPermission = await checkAndRequestCameraPermission();
+      if (!hasCameraPermission) {
+        console.log("❌ Camera permission denied, cannot proceed");
+        return;
+      }
+
+      setCheckoutMode(false);
+      console.log("✅ Camera opened for check-in");
+      setShowCamera(true);
+    } catch (error) {
+      console.error("❌ Error in handleCheckIn:", error);
+      showDialog("DANGER", "Error", "Failed to open camera. Please try again.");
     }
-    setCheckoutMode(false);
-    console.log("Camera opened for check-in");
-    setShowCamera(true);
   };
 
   const handleCheckOut = async () => {
-    const isWifiConnected = await checkWifi(true);
-    if (!isWifiConnected) {
-      return;
+    try {
+      const isWifiConnected = await checkWifi(true);
+      if (!isWifiConnected) {
+        return;
+      }
+
+      const hasCameraPermission = await checkAndRequestCameraPermission();
+      if (!hasCameraPermission) {
+        console.log("❌ Camera permission denied, cannot proceed");
+        return;
+      }
+
+      setCheckoutMode(true);
+      console.log("✅ Camera opened for check-out");
+      setShowCamera(true);
+    } catch (error) {
+      console.error("❌ Error in handleCheckOut:", error);
+      showDialog("DANGER", "Error", "Failed to open camera. Please try again.");
     }
-    setCheckoutMode(true);
-    console.log("Camera opened for check-out");
-    setShowCamera(true);
   };
 
   const takePicture = async () => {
@@ -458,6 +688,7 @@ const Index = () => {
         const photo = await cameraRef.current.takePictureAsync({
           quality: 0.5,
           skipProcessing: false,
+          mirror: false, // Disable mirroring
         });
 
         console.log("Photo taken successfully:", {
@@ -470,340 +701,26 @@ const Index = () => {
           throw new Error("Photo capture failed - no URI returned");
         }
 
-        console.log("Step 2: Getting WiFi details...");
-        const wifiDetails = await getWifiDetails(true);
-
-        if (!wifiDetails.isValid) {
-          console.error("WiFi validation failed");
-          Alert.alert(
-            "WiFi Required",
-            "Please connect to the office WiFi network to mark attendance."
-          );
-          setIsSubmitting(false);
-          setShowCamera(false);
-          return;
-        }
-
-        console.log("WiFi details obtained:", {
-          ssid: wifiDetails.ssid,
-          bssid: wifiDetails.bssid,
-          localIP: wifiDetails.localIP,
-          publicIP: wifiDetails.publicIP,
-        });
-
-        console.log("Step 3: Getting location...");
-        let latitude = 0;
-        let longitude = 0;
-        let locationAddress = "";
-
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== "granted") {
-          console.error("Location permission denied");
-          Alert.alert(
-            "Location Required",
-            "Location permission is required to mark attendance. Please enable location services."
-          );
-          setIsSubmitting(false);
-          setShowCamera(false);
-          return;
-        }
-
-        try {
-          const location = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-            timeInterval: 5000,
-          });
-          latitude = location.coords.latitude;
-          longitude = location.coords.longitude;
-
-          console.log("Location obtained:", { latitude, longitude });
-
-          try {
-            const reverseGeocode = await Location.reverseGeocodeAsync({
-              latitude,
-              longitude,
-            });
-            if (reverseGeocode.length > 0) {
-              const address = reverseGeocode[0];
-              locationAddress = `${address.street || ""} ${
-                address.city || ""
-              } ${address.region || ""}`.trim();
-            }
-          } catch (geocodeError) {
-            console.log(
-              "Reverse geocoding failed, using coordinates:",
-              geocodeError
-            );
-            locationAddress = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-          }
-        } catch (locationError) {
-          console.error("Location error:", locationError);
-          Alert.alert(
-            "Location Error",
-            "Unable to retrieve location. Please ensure location services are enabled and try again."
-          );
-          setIsSubmitting(false);
-          setShowCamera(false);
-          return;
-        }
-
-        console.log("Step 4: Preparing data for API...");
-        const deviceInfo = `${Platform.OS} ${Platform.Version}`;
-
-        const dataToSend = {
-          organizationId: orgId,
-          userId: userId,
-          source: "mobile",
-          timestamp: new Date().toISOString(),
-          latitude,
-          longitude,
-          locationAddress,
-          wifiSsid: wifiDetails.ssid,
-          wifiBssid: wifiDetails.bssid,
-          deviceInfo,
-          enableFaceValidation: true,
-          enableWifiValidation: true,
-          enableGPSValidation: true,
-          imageUri: photo.uri,
-          type: checkoutMode ? "check-out" : "check-in",
-        };
-
-        console.log("Validating data before API call:");
-        console.log("Type:", dataToSend.type);
-        console.log("WiFi SSID:", dataToSend.wifiSsid);
-        console.log("WiFi BSSID:", dataToSend.wifiBssid);
-        console.log("Local IP:", wifiDetails.localIP);
-        console.log("Public IP:", wifiDetails.publicIP);
-        console.log(
-          "organizationId:",
-          dataToSend.organizationId,
-          "- Length:",
-          dataToSend.organizationId.length
-        );
-        console.log(
-          "userId:",
-          dataToSend.userId,
-          "- Length:",
-          dataToSend.userId.length
-        );
-        console.log("source:", dataToSend.source);
-        console.log("imageUri exists:", !!dataToSend.imageUri);
-
-        const uuidRegex =
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-        if (!uuidRegex.test(dataToSend.organizationId)) {
-          console.error(
-            "Invalid organizationId format:",
-            dataToSend.organizationId
-          );
-          throw new Error("Invalid organization ID format");
-        }
-
-        if (!uuidRegex.test(dataToSend.userId)) {
-          console.error("Invalid userId format:", dataToSend.userId);
-          throw new Error("Invalid user ID format");
-        }
-
-        const validSources = ["mobile", "web", "biometric", "wifi", "manual"];
-        if (!validSources.includes(dataToSend.source)) {
-          console.error("Invalid source:", dataToSend.source);
-          throw new Error("Invalid source value");
-        }
-
-        console.log("✅ All validations passed");
-
-        console.log("Step 5: Checking network connectivity...");
-        try {
-          const networkState = await Network.getNetworkStateAsync();
-          console.log("Network state:", {
-            isConnected: networkState.isConnected,
-            isInternetReachable: networkState.isInternetReachable,
-            type: networkState.type,
-          });
-
-          if (!networkState.isConnected) {
-            throw new Error("No network connection available");
-          }
-        } catch (networkError) {
-          console.error("Network check failed:", networkError);
-          Alert.alert(
-            "Network Error",
-            "Please check your internet connection and try again."
-          );
-          setIsSubmitting(false);
-          setShowCamera(false);
-          return;
-        }
-
-        console.log("Step 6: Making API call...");
-        const response = await logAttendance(dataToSend);
-
-        console.log("API call successful:", response.data);
-
-        console.log("Step 7: Handling response...");
-        const actionType = checkoutMode ? "Check-out" : "Check-in";
-
-        if (response.data.status === "success") {
-          Alert.alert(
-            "Success",
-            `${actionType} successful! Your attendance has been recorded.`,
-            [
-              {
-                text: "OK",
-                onPress: () => {
-                  setIsCheckedIn(checkoutMode ? false : true);
-                  setShowCamera(false);
-                  setIsSubmitting(false);
-                  setCheckoutMode(false);
-                  fetchAttendanceLogs();
-                },
-              },
-            ]
-          );
-        } else if (response.data.status === "anomaly") {
-          const reasons = response.data.reasons || [];
-          const reasonText =
-            reasons.length > 0 ? reasons.join(", ") : "Unknown reason";
-
-          Alert.alert(
-            "Attendance Recorded with Anomaly",
-            `Your ${actionType.toLowerCase()} has been recorded, but there's an anomaly detected: ${reasonText}. Please contact your administrator if needed.`,
-            [
-              {
-                text: "OK",
-                onPress: () => {
-                  setIsCheckedIn(checkoutMode ? false : true);
-                  setShowCamera(false);
-                  setIsSubmitting(false);
-                  setCheckoutMode(false);
-                  fetchAttendanceLogs();
-                },
-              },
-            ]
-          );
-        } else {
-          Alert.alert(
-            "Notice",
-            `${actionType} processed with status: ${response.data.status}`,
-            [
-              {
-                text: "OK",
-                onPress: () => {
-                  setIsCheckedIn(checkoutMode ? false : true);
-                  setShowCamera(false);
-                  setIsSubmitting(false);
-                  setCheckoutMode(false);
-                  fetchAttendanceLogs();
-                },
-              },
-            ]
-          );
-        }
-
-        console.log("=== takePicture process completed successfully ===");
-      } catch (error: any) {
+        setPreviewImage(photo.uri);
+        setShowCamera(false);
+        setIsSubmitting(false);
+      } catch (error) {
         console.error("=== takePicture process failed ===");
-        console.error("Full error object:", error);
         console.error("Error message:", error.message);
-
-        let errorMessage = "Failed to process attendance. Please try again.";
-
-        if (error.message?.includes("Invalid organization ID format")) {
-          errorMessage =
-            "Invalid organization ID. Please contact your administrator.";
-        } else if (error.message?.includes("Invalid user ID format")) {
-          errorMessage = "Invalid user ID. Please contact your administrator.";
-        } else if (error.message?.includes("Invalid source value")) {
-          errorMessage =
-            "Invalid source configuration. Please contact your administrator.";
-        } else if (error.response?.status === 400) {
-          const apiErrors = error.response.data?.message || [];
-          if (Array.isArray(apiErrors)) {
-            errorMessage = `Validation Error: ${apiErrors.join(", ")}`;
-          } else {
-            errorMessage =
-              error.response.data?.message || "Invalid request data.";
+        showDialog(
+          "DANGER",
+          "Error",
+          "Failed to capture photo. Please try again.",
+          () => {
+            setIsSubmitting(false);
+            setShowCamera(true); // Reopen camera for retry
           }
-        } else if (
-          error.message?.includes("Photo capture failed") ||
-          error.message?.includes("no URI returned")
-        ) {
-          errorMessage = "Failed to capture photo. Please try again.";
-        } else if (error.message?.includes("Image URI is missing")) {
-          errorMessage =
-            "Photo capture failed. Please try taking the photo again.";
-        } else if (
-          error.message?.includes("Network Error") ||
-          error.message?.includes("network") ||
-          error.code === "NETWORK_ERROR" ||
-          error.code === "ERR_NETWORK"
-        ) {
-          errorMessage =
-            "Network connection failed. Please check your internet connection and try again.";
-        } else if (
-          error.message?.includes("timeout") ||
-          error.code === "ECONNABORTED"
-        ) {
-          errorMessage =
-            "Request timeout. Please try again with a better connection.";
-        } else if (error.response) {
-          const status = error.response.status;
-          const data = error.response.data;
-
-          console.error("API Error Response:", {
-            status,
-            statusText: error.response.statusText,
-            data,
-          });
-
-          switch (status) {
-            case 401:
-              errorMessage = "Authentication failed. Please login again.";
-              break;
-            case 403:
-              errorMessage =
-                "Access denied. Please contact your administrator.";
-              break;
-            case 413:
-              errorMessage = "Image size too large. Please try again.";
-              break;
-            case 500:
-              errorMessage = "Server error. Please try again later.";
-              break;
-            default:
-              errorMessage =
-                data.message || `Server error (${status}). Please try again.`;
-          }
-        } else if (error.request) {
-          console.error(
-            "Request made but no response received:",
-            error.request
-          );
-          errorMessage =
-            "No response from server. Please check your connection.";
-        }
-
-        Alert.alert("Error", errorMessage, [
-          {
-            text: "Retry",
-            onPress: () => {
-              setIsSubmitting(false);
-            },
-          },
-          {
-            text: "Cancel",
-            style: "cancel",
-            onPress: () => {
-              setIsSubmitting(false);
-              setShowCamera(false);
-              setCheckoutMode(false);
-            },
-          },
-        ]);
+        );
+        setIsSubmitting(false);
+        setCheckoutMode(false);
       }
     } else {
-      Alert.alert("Error", "Camera not initialized");
+      showDialog("DANGER", "Error", "Camera not initialized");
       console.error("Camera ref is null");
       setIsSubmitting(false);
       setShowCamera(false);
@@ -811,51 +728,357 @@ const Index = () => {
     }
   };
 
-  // Helper function to format time with AM/PM - Updated to show 00:00 instead of N/A
-  const formatTime = (timestamp) => {
-    if (!timestamp) return "00:00";
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
+const handleSubmitImage = async () => {
+  if (!previewImage) {
+    showDialog("DANGER", "Error", "No image to submit", () => {
+      setIsSubmitting(false);
+      setPreviewImage(null);
     });
+    return;
+  }
+
+  setIsSubmitting(true);
+  console.log("=== Starting submit image process ===");
+
+  try {
+    // Step 1: Get WiFi details
+    console.log("Step 1: Getting WiFi details...");
+    const wifiDetails = await getWifiDetails(true);
+
+    if (!wifiDetails.isValid) {
+      console.error("WiFi validation failed");
+      showDialog(
+        "DANGER",
+        "WiFi Required",
+        "Please connect to the office WiFi network to mark attendance.",
+        () => {
+          setIsSubmitting(false);
+          setPreviewImage(null);
+        }
+      );
+      return;
+    }
+
+    console.log("WiFi details obtained:", {
+      ssid: wifiDetails.ssid,
+      bssid: wifiDetails.bssid,
+      localIP: wifiDetails.localIP,
+      publicIP: wifiDetails.publicIP,
+    });
+
+    // Step 2: Get location
+    console.log("Step 2: Getting location...");
+    let latitude = 0;
+    let longitude = 0;
+    let locationAddress = "";
+
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== "granted") {
+      console.error("Location permission denied");
+      showDialog(
+        "DANGER",
+        "Location Required",
+        "Location permission is required to mark attendance. Please enable location services.",
+        () => {
+          setIsSubmitting(false);
+          setPreviewImage(null);
+        }
+      );
+      return;
+    }
+
+    const location = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+      timeInterval: 5000,
+    });
+    latitude = location.coords.latitude;
+    longitude = location.coords.longitude;
+    console.log("Location obtained:", { latitude, longitude });
+
+    try {
+      const reverseGeocode = await Location.reverseGeocodeAsync({
+        latitude,
+        longitude,
+      });
+      if (reverseGeocode.length > 0) {
+        const address = reverseGeocode[0];
+        locationAddress = `${address.street || ""} ${address.city || ""} ${
+          address.region || ""
+        }`.trim();
+      }
+    } catch (geocodeError) {
+      console.log("Reverse geocoding failed, using coordinates:", geocodeError);
+      locationAddress = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+    }
+
+    // Step 3: Prepare data for API
+    console.log("Step 3: Preparing data for API...");
+    const deviceInfo = `${Platform.OS} ${Platform.Version}`;
+
+    const dataToSend = {
+      organizationId: orgId,
+      userId: userId,
+      source: "mobile",
+      timestamp: new Date().toISOString(),
+      latitude,
+      longitude,
+      locationAddress,
+      wifiSsid: wifiDetails.ssid,
+      wifiBssid: wifiDetails.bssid,
+      deviceInfo,
+      enableFaceValidation: true,
+      enableWifiValidation: true,
+      enableGPSValidation: true,
+      imageUri: previewImage,
+      type: checkoutMode ? "check-out" : "check-in",
+    };
+
+    console.log("Validating data before API call:", {
+      type: dataToSend.type,
+      wifiSsid: dataToSend.wifiSsid,
+      wifiBssid: dataToSend.wifiBssid,
+      localIP: wifiDetails.localIP,
+      publicIP: wifiDetails.publicIP,
+      organizationId: dataToSend.organizationId,
+      userId: dataToSend.userId,
+      source: dataToSend.source,
+      imageUri: !!dataToSend.imageUri,
+    });
+
+    // Validate UUIDs and source
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(dataToSend.organizationId)) {
+      throw new Error("Invalid organization ID format");
+    }
+    if (!uuidRegex.test(dataToSend.userId)) {
+      throw new Error("Invalid user ID format");
+    }
+    const validSources = ["mobile", "web", "biometric", "wifi", "manual"];
+    if (!validSources.includes(dataToSend.source)) {
+      throw new Error("Invalid source value");
+    }
+
+    console.log("✅ All validations passed");
+
+    // Step 4: Check network connectivity
+    console.log("Step 4: Checking network connectivity...");
+    const networkState = await Network.getNetworkStateAsync();
+    console.log("Network state:", {
+      isConnected: networkState.isConnected,
+      isInternetReachable: networkState.isInternetReachable,
+      type: networkState.type,
+    });
+
+    if (!networkState.isConnected) {
+      throw new Error("No network connection available");
+    }
+
+    // Step 5: Make API call
+    console.log("Step 5: Making API call...");
+    const response = await logAttendance(dataToSend);
+    console.log("API call successful:", response.data);
+
+    // Step 6: Handle response
+    console.log("Step 6: Handling response...");
+    const actionType = checkoutMode ? "Check-out" : "Check-in";
+
+if (response.data.status === "success") {
+  Alert.alert(
+    "Success",
+    `${actionType} successful! Your attendance has been recorded.`,
+    [
+      {
+        text: "OK",
+        onPress: () => {
+          setIsCheckedIn(checkoutMode ? false : true);
+          setPreviewImage(null);
+          setIsSubmitting(false);
+          setCheckoutMode(false);
+          fetchAttendanceLogs();
+        },
+      },
+    ]
+  );
+} else if (response.data.status === "anomaly") {
+  const reasons = response.data.reasons || [];
+  const reasonText = reasons.length > 0 ? reasons.join(", ") : "Unknown reason";
+  Alert.alert(
+    "Attendance Recorded with Anomaly",
+    `Your ${actionType.toLowerCase()} has been recorded.\n\nReason: ${reasonText}\n\nPlease ensure that you are connected to the office Wi-Fi or within the office premises.`,
+    [
+      {
+        text: "OK",
+        onPress: () => {
+          setIsCheckedIn(checkoutMode ? false : true);
+          setPreviewImage(null);
+          setIsSubmitting(false);
+          setCheckoutMode(false);
+          fetchAttendanceLogs();
+        },
+      },
+    ]
+  );
+} else {
+  Alert.alert(
+    "Notice",
+    `${actionType} processed with status: ${response.data.status}`,
+    [
+      {
+        text: "OK",
+        onPress: () => {
+          setIsCheckedIn(checkoutMode ? false : true);
+          setPreviewImage(null);
+          setIsSubmitting(false);
+          setCheckoutMode(false);
+          fetchAttendanceLogs();
+        },
+      },
+    ]
+  );
+}
+
+    console.log("=== submitImage process completed successfully ===");
+  } catch (error) {
+    console.error("=== submitImage process failed ===");
+    console.error("Error message:", error.message);
+
+    let errorMessage = "Failed to process attendance. Please try again.";
+
+    if (error.message?.includes("Invalid organization ID format")) {
+      errorMessage = "Invalid organization ID. Please contact your administrator.";
+    } else if (error.message?.includes("Invalid user ID format")) {
+      errorMessage = "Invalid user ID. Please contact your administrator.";
+    } else if (error.message?.includes("Invalid source value")) {
+      errorMessage = "Invalid source configuration. Please contact your administrator.";
+    } else if (error.message?.includes("No network connection available")) {
+      errorMessage = "No network connection available. Please check your internet connection.";
+    } else if (error.response) {
+      const status = error.response.status;
+      const data = error.response.data;
+
+      console.error("API Error Response:", { status, data });
+
+      switch (status) {
+        case 400:
+          errorMessage = data?.message
+            ? Array.isArray(data.message)
+              ? `Validation Error: ${data.message.join(", ")}`
+              : data.message
+            : "Invalid request data.";
+          break;
+        case 401:
+          errorMessage = "Authentication failed. Please login again.";
+          break;
+        case 403:
+          errorMessage = "Access denied. Please contact your administrator.";
+          break;
+        case 413:
+          errorMessage = "Image size too large. Please try again.";
+          break;
+        case 500:
+          errorMessage = "Server error. Please try again later.";
+          break;
+        default:
+          errorMessage = data?.message || `Server error (${status}). Please try again.`;
+      }
+    } else if (error.request) {
+      console.error("Request made but no response received:", error.request);
+      errorMessage = "No response from server. Please check your connection.";
+    } else if (
+      error.message?.includes("timeout") ||
+      error.code === "ECONNABORTED"
+    ) {
+      errorMessage = "Request timeout. Please try again with a better connection.";
+    }
+
+    showDialog(
+      "DANGER",
+      "Error",
+      errorMessage,
+      () => {
+        setIsSubmitting(false);
+        setPreviewImage(null);
+        setCheckoutMode(false);
+      }
+    );
+  } finally {
+    console.log("=== submitImage process finalized ===");
+  }
+};
+
+  const formatTime = (timestamp) => {
+    if (!timestamp) return "00:00 AM";
+    const date = new Date(timestamp);
+    return date
+      .toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      })
+      .toUpperCase();
   };
 
-  // Helper function to format date - Updated to show current date instead of N/A
   const formatDate = (timestamp) => {
     if (!timestamp) {
       const today = new Date();
-      return today.toLocaleDateString("en-US", {
+      return today.toLocaleDateString("en-IN", {
         month: "short",
         day: "2-digit",
         year: "numeric",
       });
     }
     const date = new Date(timestamp);
-    return date.toLocaleDateString("en-US", {
+    return date.toLocaleDateString("en-IN", {
       month: "short",
       day: "2-digit",
       year: "numeric",
     });
   };
 
-  // Helper function to calculate working hours - Updated to show 0:00 HRS consistently
   const calculateWorkingHours = () => {
-    if (!punchInTime) return "0:00 HRS";
+    if (!punchInTime) return "0:00 hours";
 
     const checkInTime = new Date(punchInTime);
-    const currentTime = new Date();
-    const endTime = lastPunch ? new Date(lastPunch) : currentTime;
+    const hasCheckOutToday = attendanceLogs.some(
+      (log) =>
+        log.type === "check-out" &&
+        new Date(log.timestamp).toISOString().split("T")[0] ===
+          new Date().toISOString().split("T")[0]
+    );
+
+    const endTime =
+      hasCheckOutToday && lastPunch ? new Date(lastPunch) : new Date();
 
     const diffMs = endTime.getTime() - checkInTime.getTime();
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
 
-    return `${diffHours}:${diffMinutes.toString().padStart(2, "0")} HRS`;
+    return `${diffHours}:${diffMinutes.toString().padStart(2, "0")} hours`;
   };
 
-  // Button logic based on punchInTime and absence of check-out today
+  const handleRefreshWorkingHours = async () => {
+    setRefreshing(true);
+    try {
+      await fetchAttendanceLogs();
+      setTime(new Date());
+    } catch (error) {
+      console.error("Working hours refresh error:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const canFetchData = async () => {
+    try {
+      const networkState = await Network.getNetworkStateAsync();
+      return networkState.isConnected;
+    } catch (error) {
+      console.error("Network check failed:", error);
+      return false;
+    }
+  };
+
   const today = new Date().toISOString().split("T")[0];
   const hasCheckInToday =
     punchInTime && new Date(punchInTime).toISOString().split("T")[0] === today;
@@ -867,14 +1090,65 @@ const Index = () => {
   const showCheckInButton = !hasCheckInToday || hasCheckOutToday;
   const isCheckInDisabled = !isWifiValid || !isLocationValid;
 
+  if (previewImage) {
+    return (
+      <View style={styles.previewContainer}>
+        <Image
+          source={{ uri: previewImage }}
+          style={styles.previewImage}
+          resizeMode="contain"
+        />
+        <View style={styles.previewButtons}>
+      <TouchableOpacity
+  style={[styles.previewButton, styles.submitButton]}
+  onPress={handleSubmitImage}
+  disabled={isSubmitting}
+>
+  {isSubmitting ? (
+    <ActivityIndicator size="small" color="#4CAF50" />
+  ) : (
+    <Text style={[styles.buttonText, styles.submitText]}>Submit</Text>
+  )}
+</TouchableOpacity>
+
+<TouchableOpacity
+  style={[styles.previewButton, styles.retakeButton]}
+  onPress={() => {
+    setPreviewImage(null);
+    setShowCamera(true);
+  }}
+  disabled={isSubmitting}
+>
+  <Text style={[styles.buttonText, styles.retakeText]}>Retake</Text>
+</TouchableOpacity>
+
+        </View>
+        {isSubmitting && (
+          <View style={styles.loaderOverlay}>
+            <View style={styles.loaderContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={[styles.loaderText, { color: colors.text }]}>
+                {checkoutMode
+                  ? "Processing check-out..."
+                  : "Processing check-in..."}
+              </Text>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  }
+
   if (showCamera) {
     return (
       <View style={styles.cameraContainer}>
         <CameraView
+          ref={cameraRef}
           style={styles.camera}
           facing="front"
-          ref={cameraRef}
           ratio="4:3"
+          autoFocus="on"
+          pictureSize="Medium"
         >
           <View style={styles.cameraControls}>
             <TouchableOpacity
@@ -942,9 +1216,10 @@ const Index = () => {
           currentDate={currentDate}
           formattedTime={formattedTime}
           timePeriod={timePeriod}
+          userName={user?.name || user?.firstName || "User"}
           isCheckedIn={isCheckedIn}
           punchInTime={punchInTime}
-          lastPunch={punchInTime}
+          lastPunch={lastPunch}
           isLoadingWifi={isLoadingWifi}
           isWifiValid={isWifiValid}
           isLoadingLocation={isLoadingLocation}
@@ -964,7 +1239,11 @@ const Index = () => {
           </Text>
           <TouchableOpacity
             onPress={() => {
-              route.push("/(tabs)/attendance");
+              showDialog(
+                "INFO",
+                "Error",
+                "Failed to load attendance details. Please try again."
+              );
             }}
           >
             <Text style={[styles.viewall, { color: colors.primary }]}>
@@ -973,7 +1252,6 @@ const Index = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Punch In Card - Always visible */}
         <View style={styles.attendanceCard}>
           <View style={styles.iconContainer}>
             <View
@@ -1001,7 +1279,6 @@ const Index = () => {
           </View>
         </View>
 
-        {/* Last Punch Card - Always visible */}
         <View style={styles.attendanceCard}>
           <View style={styles.iconContainer}>
             <View
@@ -1031,7 +1308,6 @@ const Index = () => {
           </View>
         </View>
 
-        {/* Working Hours Card - Always visible */}
         <View style={styles.attendanceCard}>
           <View style={styles.iconContainer}>
             <View style={[styles.iconBox, { backgroundColor: "#C2FFC7" }]}>
@@ -1050,9 +1326,16 @@ const Index = () => {
             <Text style={[styles.time, { color: colors.text }]}>
               {calculateWorkingHours()}
             </Text>
-            <Text style={styles.status}>
-              {punchInTime ? "Active" : "Inactive"}
-            </Text>
+            <TouchableOpacity
+              onPress={handleRefreshWorkingHours}
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Ionicons name="refresh" size={16} color={colors.primary} />
+              )}
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -1063,12 +1346,23 @@ const Index = () => {
           <UpcomingHoliday />
         </View>
       </ScrollView>
+
+      {/* Add CustomDialog to the render tree */}
+      <CustomDialog
+        isVisible={dialogVisible}
+        type={dialogType}
+        title={dialogTitle}
+        message={dialogMessage}
+        onConfirm={dialogOnConfirm}
+        onCancel={() => setDialogVisible(false)}
+      />
     </View>
   );
 };
 
 export default Index;
 
+// Styles remain unchanged
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1087,20 +1381,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
-    padding: 30,
+    padding: moderateScale(30),
   },
   cameraButton: {
     backgroundColor: "rgba(0,0,0,0.7)",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 25,
+    paddingHorizontal: horizontalScale(20),
+    paddingVertical: verticalScale(10),
+    borderRadius: moderateScale(25),
     alignItems: "center",
-    minWidth: 80,
+    minWidth: horizontalScale(80),
   },
   captureButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: horizontalScale(80),
+    height: horizontalScale(80),
+    borderRadius: horizontalScale(40),
     backgroundColor: "rgba(255,255,255,0.3)",
     justifyContent: "center",
     alignItems: "center",
@@ -1108,38 +1402,38 @@ const styles = StyleSheet.create({
     borderColor: "#fff",
   },
   captureButtonInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: horizontalScale(60),
+    height: horizontalScale(60),
+    borderRadius: horizontalScale(30),
     backgroundColor: "#fff",
   },
   placeholderButton: {
-    width: 80,
-    height: 50,
+    width: horizontalScale(80),
+    height: verticalScale(50),
   },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    marginTop: 10,
+    paddingHorizontal: horizontalScale(20),
+    marginTop: verticalScale(10),
   },
   sectionDetails: {
-    fontSize: 17,
+    fontSize: moderateScale(17),
     fontWeight: "800",
   },
   viewall: {
-    fontSize: 14,
+    fontSize: moderateScale(14),
     fontWeight: "600",
   },
   attendanceCard: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 12,
-    marginHorizontal: 20,
-    marginTop: 12,
+    borderRadius: moderateScale(12),
+    padding: moderateScale(12),
+    marginHorizontal: horizontalScale(20),
+    marginTop: verticalScale(12),
     elevation: 3,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -1147,12 +1441,12 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   iconContainer: {
-    marginRight: 12,
+    marginRight: horizontalScale(12),
   },
   iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: horizontalScale(40),
+    height: horizontalScale(40),
+    borderRadius: horizontalScale(20),
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1160,26 +1454,26 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: "600",
     color: "#1e7ba8",
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: moderateScale(12),
     color: "#999",
   },
   timeContainer: {
     alignItems: "flex-end",
   },
   time: {
-    fontSize: 16,
+    fontSize: moderateScale(16),
     fontWeight: "600",
     color: "#1e7ba8",
   },
   status: {
-    fontSize: 10,
+    fontSize: moderateScale(10),
     color: "#999",
-    marginTop: 2,
+    marginTop: verticalScale(2),
   },
   captureButtonDisabled: {
     backgroundColor: "rgba(255,255,255,0.1)",
@@ -1196,9 +1490,9 @@ const styles = StyleSheet.create({
   },
   loaderContainer: {
     backgroundColor: "#fff",
-    paddingVertical: 20,
-    paddingHorizontal: 30,
-    borderRadius: 10,
+    paddingVertical: verticalScale(20),
+    paddingHorizontal: horizontalScale(30),
+    borderRadius: moderateScale(10),
     elevation: 6,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -1207,8 +1501,55 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   loaderText: {
-    marginTop: 10,
-    fontSize: 16,
+    marginTop: verticalScale(10),
+    fontSize: moderateScale(16),
     fontWeight: "500",
   },
+  previewContainer: {
+    flex: 1,
+    backgroundColor: "#000",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  previewImage: {
+    width: "100%",
+    height: "70%",
+    borderRadius: moderateScale(10),
+    transform: [{ scaleX: -1 }],
+  },
+previewButtons: {
+  width: "90%",
+  marginTop: verticalScale(20),
+  gap: verticalScale(12),
+},
+
+previewButton: {
+  width: "100%",
+  paddingVertical: verticalScale(14),
+  borderRadius: moderateScale(12),
+  alignItems: "center",
+  borderWidth: 2,
+  backgroundColor: "#000", // Keep background dark if you want contrast
+},
+
+retakeButton: {
+  borderColor: "#FF4D4D",
+},
+
+
+submitButton: {
+  borderColor: "#006203ff",
+
+  backgroundColor:"#cdffcfff"
+},
+buttonText: {
+  fontSize: moderateScale(16),
+  fontWeight: "600",
+},
+submitText: {
+  color: "#31a400ff",
+},
+retakeText: {
+  color: "#FF4D4D",
+},
 });

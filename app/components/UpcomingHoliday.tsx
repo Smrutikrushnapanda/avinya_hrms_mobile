@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   FlatList,
   StyleSheet,
   Text,
@@ -13,6 +15,10 @@ import {
 import { getHolidaysByFinancialYear } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
 import { darkTheme, lightTheme } from "../constants/colors";
+
+const { width: screenWidth } = Dimensions.get('window');
+const CARD_WIDTH = screenWidth - 40; // Full width minus padding
+const router=useRouter();
 
 const UpcomingHoliday = () => {
   const colorScheme = useColorScheme() ?? "light";
@@ -120,58 +126,79 @@ const UpcomingHoliday = () => {
           styles.holidayCard,
           {
             backgroundColor: colors.background,
-            borderColor: item.isOptional ? "#FFA500" : colors.primary,
           },
         ]}
         activeOpacity={0.8}
       >
+        {/* Background Gradient Effect */}
+        <View 
+          style={[
+            styles.gradientOverlay,
+            {
+              backgroundColor: item.isOptional ? 'rgba(255, 165, 0, 0.08)' : 'rgba(74, 144, 226, 0.08)',
+            }
+          ]} 
+        />
+        
+        {/* Header Section */}
         <View style={styles.cardHeader}>
-          <View style={styles.dateContainer}>
-            <Text style={[styles.dayText, { color: colors.text }]}>{day}</Text>
-            <Text style={[styles.monthText, { color: colors.text }]}>
-              {month}
-            </Text>
-          </View>
-          <View style={styles.typeContainer}>
-            <View
-              style={[
-                styles.typeIndicator,
-                {
-                  backgroundColor: item.isOptional ? "#FFA500" : colors.primary,
-                },
-              ]}
-            >
-              <Ionicons
-                name={item.isOptional ? "ellipse-outline" : "ellipse"}
-                size={8}
-                color="#fff"
-              />
+          <View style={styles.leftSection}>
+            <View style={styles.dateBox}>
+              <Text style={[styles.dayText, { color: item.isOptional ? "#FF8C00" : "#4A90E2" }]}>
+                {day}
+              </Text>
+              <View style={[styles.monthBadge, { backgroundColor: item.isOptional ? "#FF8C00" : "#4A90E2" }]}>
+                <Text style={styles.monthText}>{month}</Text>
+              </View>
             </View>
-            <Text
-              style={[
-                styles.typeText,
-                {
-                  color: item.isOptional ? "#FFA500" : colors.primary,
-                },
-              ]}
-            >
-              {item.isOptional ? "Optional" : "Holiday"}
-            </Text>
+          </View>
+          
+          <View style={styles.rightSection}>
+            <View style={[styles.typeBadge, { backgroundColor: item.isOptional ? "#FFF3E0" : "#E3F2FD" }]}>
+              <Ionicons
+                name={item.isOptional ? "calendar" : "calendar"}
+                size={12}
+                color={item.isOptional ? "#FF8C00" : "#4A90E2"}
+                style={styles.badgeIcon}
+              />
+              <Text
+                style={[
+                  styles.typeText,
+                  { color: item.isOptional ? "#FF8C00" : "#4A90E2" },
+                ]}
+              >
+                {item.isOptional ? "Restricted" : "Public Holiday"}
+              </Text>
+            </View>
           </View>
         </View>
 
+        {/* Body Section */}
         <View style={styles.cardBody}>
-          <Text
-            style={[styles.holidayName, { color: colors.text }]}
-            numberOfLines={2}
-            ellipsizeMode="tail"
-          >
-            {item.name}
-          </Text>
-          <Text style={[styles.daysRemaining, { color: "#666" }]}>
-            {daysRemaining}
-          </Text>
-        </View>
+  <View style={styles.nameAndCountdown}>
+    <Text
+      style={[styles.holidayName, { color: colors.text }]}
+      numberOfLines={2}
+      ellipsizeMode="tail"
+    >
+      {item.name}
+    </Text>
+
+    <View style={styles.countdownContainer}>
+      <Ionicons 
+        name="time-outline" 
+        size={14} 
+        color="#666" 
+        style={styles.clockIcon}
+      />
+      <Text style={styles.daysRemaining}>
+        {daysRemaining}
+      </Text>
+    </View>
+  </View>
+
+</View>
+
       </TouchableOpacity>
     );
   };
@@ -204,51 +231,32 @@ const UpcomingHoliday = () => {
         <Text style={[styles.sectionTitle, { color: colors.text }]}>
           Upcoming Holidays
         </Text>
-        <TouchableOpacity>
-          <Text style={[styles.viewAllText, { color: colors.primary }]}>
-            View All
-          </Text>
-        </TouchableOpacity>
+        <TouchableOpacity onPress={() => router.push("/ViewAllHolidays")}>
+  <Text style={[styles.viewAllText, { color: colors.primary }]}>
+    View All
+  </Text>
+</TouchableOpacity>
       </View>
-      <View
-        style={[
-          {
-            backgroundColor: "white",
-            borderRadius: 20,
-            padding: 10,
-            marginHorizontal: 8,
-            marginVertical: 8,
-            elevation: 3,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-            marginBottom: 40,
-          },
-        ]}
-      >
-        <FlatList
-          data={upcomingHolidays}
-          renderItem={renderHolidayCard}
-          keyExtractor={(item) => item.id.toString()}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.listContainer}
-          snapToInterval={
-            styles.holidayCard.width + styles.listContainer.paddingHorizontal
-          }
-          snapToAlignment="start"
-          decelerationRate="fast"
-          pagingEnabled={false}
-        />
-      </View>
+      <FlatList
+        data={upcomingHolidays}
+        renderItem={renderHolidayCard}
+        keyExtractor={(item) => item.id.toString()}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.listContainer}
+        snapToInterval={CARD_WIDTH + 12} // Card width + margin
+        snapToAlignment="start"
+        decelerationRate="fast"
+        pagingEnabled={true}
+      />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 5,
+    // marginTop: 5,
+    marginBottom:25
   },
   header: {
     flexDirection: "row",
@@ -269,68 +277,112 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   holidayCard: {
-    width: 160,
-    height: 130,
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 12,
+    width: CARD_WIDTH,
+    height: 140,
+    borderRadius: 20,
+    padding: 0,
     marginRight: 12,
-    elevation: 3,
+    elevation: 4,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    marginBottom: 10,
-    marginTop: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    marginBottom: 15,
+    marginTop: 8,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  gradientOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 20,
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 8,
+    padding: 20,
+    paddingBottom: 12,
   },
-  dateContainer: {
-    alignItems: "center",
-  },
-  dayText: {
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-  monthText: {
-    fontSize: 12,
-    fontWeight: "600",
-    textTransform: "uppercase",
-  },
-  typeContainer: {
+  leftSection: {
     flexDirection: "row",
     alignItems: "center",
   },
-  typeIndicator: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    justifyContent: "center",
+  dateBox: {
     alignItems: "center",
+  },
+  dayText: {
+    fontSize: 28,
+    fontWeight: "800",
+    lineHeight: 32,
+  },
+  monthBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  monthText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#fff",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  rightSection: {
+    alignItems: "flex-end",
+  },
+  typeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 15,
+  },
+  badgeIcon: {
     marginRight: 4,
   },
   typeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "600",
     textTransform: "uppercase",
+    letterSpacing: 0.3,
   },
   cardBody: {
     flex: 1,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
     justifyContent: "space-between",
   },
   holidayName: {
-    fontSize: 14,
-    fontWeight: "600",
-    lineHeight: 18,
+    fontSize: 18,
+    fontWeight: "700",
+    lineHeight: 22,
+    marginBottom: 12,
+  },
+  footerSection: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  countdownContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.05)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  clockIcon: {
+    marginRight: 4,
   },
   daysRemaining: {
     fontSize: 12,
-    fontWeight: "500",
-    marginTop: 4,
+    fontWeight: "600",
+    color: "#666",
   },
   loadingContainer: {
     flexDirection: "row",
@@ -351,6 +403,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 8,
   },
+  nameAndCountdown: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 10,
+},
 });
 
 export default UpcomingHoliday;
