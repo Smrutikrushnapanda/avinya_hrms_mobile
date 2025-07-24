@@ -916,8 +916,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   actionSection: {
-    marginTop: verticalScale(20),
+    marginTop: verticalScale(10),
     gap: verticalScale(12),
+    marginBottom: verticalScale(30),
+
   },
   actionButton: {
     flexDirection: "row",

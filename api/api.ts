@@ -18,12 +18,6 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    console.log("API Request Config:", {
-      url: config.url,
-      method: config.method,
-      headers: config.headers,
-      timeout: config.timeout,
-    });
     return config;
   },
   (error) => {
@@ -35,11 +29,6 @@ api.interceptors.request.use(
 // Response interceptor to log success and handle 401
 api.interceptors.response.use(
   (response) => {
-    console.log("API Response Success:", {
-      status: response.status,
-      statusText: response.statusText,
-      data: response.data,
-    });
     return response;
   },
   (error) => {

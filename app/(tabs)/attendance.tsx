@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -31,6 +32,7 @@ const Attendance = () => {
   const [currentPage, setCurrentPage] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [hasMoreData, setHasMoreData] = useState<boolean>(true);
   const [totalWorkingDays, setTotalWorkingDays] = useState<number>(0);
   const [employeeWorkingDays, setEmployeeWorkingDays] = useState<number>(0);
@@ -298,11 +300,13 @@ const Attendance = () => {
   }, [user?.userId, user?.organizationId, selectedMonth, selectedYear]);
 
   // Function to handle refresh
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
+    setRefreshing(true);
     setCurrentPage(0);
     setDisplayedItems([]);
     setHasMoreData(true);
-    fetchAttendanceData();
+    await fetchAttendanceData();
+    setRefreshing(false);
   };
 
   // Handle month selection
@@ -311,6 +315,11 @@ const Attendance = () => {
     setSelectedYear(year);
     setShowMonthPicker(false);
   };
+
+  // Calculate attendance percentage
+  const attendancePercentage = totalWorkingDays
+    ? ((employeeWorkingDays / totalWorkingDays) * 100).toFixed(1)
+    : "0.0";
 
   // Month Picker Modal Component
   const MonthPickerModal = () => (
@@ -326,7 +335,7 @@ const Attendance = () => {
         >
           <View style={styles.modalHeader}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>
-              Select Month & Year
+              Select Month
             </Text>
             <TouchableOpacity
               onPress={() => setShowMonthPicker(false)}
@@ -402,216 +411,225 @@ const Attendance = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
-        <Header title="Attendance" />
-        <View style={styles.cardWrapper}>
-          <View style={[styles.card, { backgroundColor: colors.white }]}>
-            <View style={styles.statsContainer}>
-              {/* Box 1 - Total Working Days */}
-              <View
-                style={[styles.cardinner, { backgroundColor: colors.white }]}
-              >
-                <View style={styles.circleDecoration} />
-                <View style={styles.cardContentinner}>
-                  <View style={styles.labelRow}>
-                    <View style={[styles.dot, { backgroundColor: "green" }]} />
-                    <Text style={[styles.labelText, { color: colors.text }]}>
-                      Total working days of this month
-                    </Text>
-                  </View>
-                  <Text style={styles.valueText}>{totalWorkingDays}</Text>
-                </View>
-              </View>
+      <Header title="Attendance" />
+      <View style={styles.cardWrapper}>
+        <View style={[styles.card, { backgroundColor: colors.white }]}>
+          {/* Decorative Triangle */}
+          <View style={styles.triangle} />
+<View style={styles.triangle2} />
+<View style={styles.triangle3} />
+<View style={styles.triangle4} />
+          {/* Attendance Overview Header */}
+          <View style={styles.overviewHeader}>
+            <FontAwesome name="bar-chart" size={24} color="#035F91" />
+            <Text style={[styles.overviewTitle, { color: colors.text }]}>
+              Attendance Overview
+            </Text>
+          </View>
 
-              {/* Box 2 - Employee Working Days */}
-              <View
-                style={[styles.cardinner, { backgroundColor: colors.white }]}
-              >
-                <View style={styles.circleDecoration} />
-                <View style={styles.cardContentinner}>
-                  <View style={styles.labelRow}>
-                    <View
-                      style={[styles.dot, { backgroundColor: "#035F91" }]}
-                    />
-                    <Text style={[styles.labelText, { color: colors.text }]}>
-                      Employee Working Days
-                    </Text>
-                  </View>
-                  <Text style={styles.valueText}>{employeeWorkingDays}</Text>
-                </View>
+          {/* Stats Row */}
+          <View style={styles.statsRow}>
+            {/* Attendance Percentage Circle */}
+            <View style={styles.statItem}>
+              <View style={styles.progressCircle}>
+                <Text style={styles.progressText}>{attendancePercentage}%</Text>
               </View>
+              <Text style={[styles.statLabel, { color: colors.text }]}>
+                Attendance Rate
+              </Text>
             </View>
 
-            {/* Refresh Button */}
+            <View style={styles.verticalDivider} />
+
+            {/* Total Working Days */}
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{totalWorkingDays}</Text>
+              <Text style={[styles.statLabel, { color: colors.text }]}>
+                Total Working Days
+              </Text>
+            </View>
+            <View style={styles.verticalDivider} />
+
+            {/* Employee Working Days */}
+            <View style={styles.statItem}>
+              <Text style={[styles.statNumber, { color: "#00C851" }]}>
+                {employeeWorkingDays}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.text }]}>
+                Employee Working Days
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.activities}>
+          {/* Header with Filter */}
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionDetails, { color: colors.text }]}>
+              Attendance History
+            </Text>
             <TouchableOpacity
-              style={styles.refreshButton}
-              onPress={handleRefresh}
+              style={styles.filterButton}
+              onPress={() => setShowMonthPicker(true)}
             >
-              <FontAwesome name="refresh" size={16} color="#035F91" />
-              <Text style={styles.refreshText}>Refresh</Text>
+              <FontAwesome name="calendar" size={16} color="#035F91" />
+              <Text style={styles.filterButtonText}>
+                {monthNames[selectedMonth - 1]} {selectedYear}
+              </Text>
+              <FontAwesome name="chevron-down" size={12} color="#035F91" />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.activities}>
-            {/* Header with Filter */}
-            <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionDetails, { color: colors.text }]}>
-                Attendance History
+          {attendanceData.length === 0 ? (
+            <View style={styles.noDataContainer}>
+              <FontAwesome name="calendar-times-o" size={48} color="#ccc" />
+              <Text style={[styles.noDataText, { color: colors.text }]}>
+                No attendance data found for {monthNames[selectedMonth - 1]}{" "}
+                {selectedYear}
               </Text>
-              <TouchableOpacity
-                style={styles.filterButton}
-                onPress={() => setShowMonthPicker(true)}
-              >
-                <FontAwesome name="calendar" size={16} color="#035F91" />
-                <Text style={styles.filterButtonText}>
-                  {monthNames[selectedMonth - 1]} {selectedYear}
-                </Text>
-                <FontAwesome name="chevron-down" size={12} color="#035F91" />
-              </TouchableOpacity>
             </View>
+          ) : (
+            <ScrollView
+              style={styles.activityScroll}
+              contentContainerStyle={{ paddingBottom: verticalScale(20) }}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={handleRefresh}
+                  colors={["#035F91"]} // Android
+                  tintColor="#035F91" // iOS
+                />
+              }
+            >
+              {displayedItems.map((item: any, index: number) => {
+                const { color: badgeColor, text: badgeText } = getBadgeProps(
+                  item.status,
+                  item.isSunday
+                );
 
-            {attendanceData.length === 0 ? (
-              <View style={styles.noDataContainer}>
-                <FontAwesome name="calendar-times-o" size={48} color="#ccc" />
-                <Text style={[styles.noDataText, { color: colors.text }]}>
-                  No attendance data found for {monthNames[selectedMonth - 1]}{" "}
-                  {selectedYear}
-                </Text>
-              </View>
-            ) : (
-              <ScrollView
-                style={styles.activityScroll}
-                contentContainerStyle={{ paddingBottom: 20 }}
-                nestedScrollEnabled
-              >
-                {displayedItems.map((item: any, index: number) => {
-                  const { color: badgeColor, text: badgeText } = getBadgeProps(
-                    item.status,
-                    item.isSunday
-                  );
+                const isNonWorkingDay = item.isHoliday || item.isSunday;
+                const isLate = item.status?.toLowerCase() === "late";
 
-                  const isNonWorkingDay = item.isHoliday || item.isSunday;
-                  const isLate = item.status?.toLowerCase() === "late";
-
-                  return (
+                return (
+                  <View
+                    key={`${item.originalDate}-${index}`}
+                    style={[
+                      styles.attendanceCard,
+                      { borderLeftColor: badgeColor },
+                    ]}
+                  >
+                    {/* Header Ribbon */}
                     <View
-                      key={`${item.originalDate}-${index}`}
-                      style={[
-                        styles.attendanceCard,
-                        { borderLeftColor: badgeColor },
-                      ]}
+                      style={[styles.ribbon, { backgroundColor: badgeColor }]}
                     >
-                      {/* Header Ribbon */}
+                      <Text style={styles.ribbonText}>
+                        {item.isHoliday
+                          ? "Holiday"
+                          : item.isSunday
+                          ? "Sunday"
+                          : badgeText}
+                      </Text>
+                    </View>
+
+                    {/* Date Section */}
+                    <View style={styles.dateSection}>
                       <View
-                        style={[styles.ribbon, { backgroundColor: badgeColor }]}
+                        style={[
+                          styles.iconCircle,
+                          isNonWorkingDay && styles.nonWorkingDayIcon,
+                          isLate && styles.lateIcon,
+                        ]}
                       >
-                        <Text style={styles.ribbonText}>
-                          {item.isHoliday
-                            ? "Holiday"
-                            : item.isSunday
-                            ? "Sunday"
-                            : badgeText}
-                        </Text>
-                      </View>
-
-                      {/* Date Section */}
-                      <View style={styles.dateSection}>
-                        <View
-                          style={[
-                            styles.iconCircle,
-                            isNonWorkingDay && styles.nonWorkingDayIcon,
-                            isLate && styles.lateIcon,
-                          ]}
-                        >
-                          <FontAwesome
-                            name={
-                              item.isHoliday
-                                ? "gift"
-                                : item.isSunday
-                                ? "sun-o"
-                                : isLate
-                                ? "clock-o"
-                                : "calendar"
+                        <FontAwesome
+                          name={
+                            item.isHoliday
+                              ? "gift"
+                              : item.isSunday
+                              ? "sun-o"
+                              : isLate
+                              ? "clock-o"
+                              : "calendar"
+                          }
+                          size={16}
+                          color={
+                            isNonWorkingDay
+                              ? "#800094"
+                              : isLate
+                              ? "#FFBB33"
+                              : "#035F91"
                             }
-                            size={16}
-                            color={
-                              isNonWorkingDay
-                                ? "#800094"
-                                : isLate
-                                ? "#FFBB33"
-                                : "#035F91"
-                            }
-                          />
-                        </View>
-                        <Text
-                          style={[
-                            styles.dateText,
-                            isNonWorkingDay && styles.nonWorkingDayText,
-                            isLate && styles.lateText,
-                          ]}
-                        >
-                          {item.date}
-                        </Text>
+                        />
                       </View>
+                      <Text
+                        style={[
+                          styles.dateText,
+                          isNonWorkingDay ? styles.nonWorkingDayText : null,
+                          isLate ? styles.lateText : null,
+                        ]}
+                      >
+                        {item.date}
+                      </Text>
+                    </View>
 
-                      {/* Time Section */}
-                      <View style={styles.timeSection}>
-                        <View style={styles.timeRow}>
-                          <FontAwesome name="clock-o" size={14} color="#999" />
-                          <Text style={styles.timeText}>
-                            In: {item.inTime || "--"}
-                          </Text>
-                          <View style={styles.timeSeparator} />
-                          <FontAwesome name="clock-o" size={14} color="#999" />
-                          <Text style={styles.timeText}>
-                            Out: {item.outTime || "--"}
-                          </Text>
-                        </View>
+                    {/* Time Section */}
+                    <View style={styles.timeSection}>
+                      <View style={styles.timeRow}>
+                        <FontAwesome name="clock-o" size={14} color="#999" />
+                        <Text style={styles.timeText}>
+                          In: {item.inTime || "--"}
+                        </Text>
+                        <View style={styles.timeSeparator} />
+                        <FontAwesome name="clock-o" size={14} color="#999" />
+                        <Text style={styles.timeText}>
+                          Out: {item.outTime || "--"}
+                        </Text>
                       </View>
                     </View>
-                  );
-                })}
-
-                {/* Load More Button */}
-                {hasMoreData && (
-                  <TouchableOpacity
-                    style={styles.loadMoreButton}
-                    onPress={loadMoreItems}
-                    disabled={loadingMore}
-                  >
-                    {loadingMore ? (
-                      <View style={styles.loadingMoreContainer}>
-                        <ActivityIndicator size="small" color="#026D94" />
-                        <Text style={styles.loadingMoreText}>
-                          Loading more...
-                        </Text>
-                      </View>
-                    ) : (
-                      <View style={styles.loadMoreContainer}>
-                        <FontAwesome
-                          name="angle-down"
-                          size={18}
-                          color="#026D94"
-                        />
-                        <Text style={styles.loadMoreText}>Load More</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                )}
-
-                {/* End of list indicator */}
-                {!hasMoreData && displayedItems.length > 0 && (
-                  <View style={styles.endOfListContainer}>
-                    <Text style={styles.endOfListText}>
-                      You've reached the end of your attendance records
-                    </Text>
                   </View>
-                )}
-              </ScrollView>
-            )}
-          </View>
+                );
+              })}
+
+              {/* Load More Button */}
+              {hasMoreData && (
+                <TouchableOpacity
+                  style={styles.loadMoreButton}
+                  onPress={loadMoreItems}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? (
+                    <View style={styles.loadingMoreContainer}>
+                      <ActivityIndicator size="small" color="#026D94" />
+                      <Text style={styles.loadingMoreText}>
+                        Loading more...
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.loadMoreContainer}>
+                      <FontAwesome
+                        name="angle-down"
+                        size={18}
+                        color="#026D94"
+                      />
+                      <Text style={styles.loadMoreText}>Load More</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              )}
+
+              {/* End of list indicator */}
+              {!hasMoreData && displayedItems.length > 0 && (
+                <View style={styles.endOfListContainer}>
+                  <Text style={styles.endOfListText}>
+                    You've reached the end of your attendance records
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+          )}
         </View>
-      </ScrollView>
+      </View>
 
       {/* Month Picker Modal */}
       <MonthPickerModal />
@@ -629,80 +647,136 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   card: {
-    borderRadius: moderateScale(16),
-    padding: moderateScale(20),
-    elevation: 2,
+    borderRadius: moderateScale(20),
+    padding: moderateScale(24),
+    elevation: 8,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: verticalScale(2) },
-    shadowOpacity: 0.2,
-    shadowRadius: moderateScale(4),
-  },
-  statsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: verticalScale(20),
-  },
-  cardinner: {
-    width: "48%",
-    borderRadius: moderateScale(12),
-    padding: moderateScale(16),
-    overflow: "hidden",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: verticalScale(1) },
-    shadowOpacity: 0.1,
-    shadowRadius: moderateScale(4),
+    shadowOffset: { width: 0, height: verticalScale(4) },
+    shadowOpacity: 0.25,
+    shadowRadius: moderateScale(10),
+    borderWidth: 1,
+    borderColor: "#E8ECEF",
+    backgroundColor: "#FFFFFF",
     position: "relative",
+    overflow: "hidden",
   },
-  cardContentinner: {
-    zIndex: 2,
-  },
-  circleDecoration: {
+  triangle: {
     position: "absolute",
-    bottom: verticalScale(-20),
-    right: horizontalScale(-20),
-    width: moderateScale(80),
-    height: moderateScale(80),
-    borderRadius: moderateScale(40),
-    backgroundColor: "#C6F3FF",
-    zIndex: 1,
+    top: 10,
+    left: 10,
+    width: 0,
+    height: 0,
+    borderStyle: "solid",
+    borderTopWidth: moderateScale(60),
+    borderRightWidth: moderateScale(60),
+    borderBottomWidth: 0,
+    borderLeftWidth: 0,
+    borderTopColor: "#E1F4FF",
+    borderRightColor: "transparent",
   },
-  labelRow: {
+triangle2: {
+  position: "absolute",
+  bottom: 10,
+  right: 10,
+  width: 0,
+  height: 0,
+  borderStyle: "solid",
+  borderTopWidth: moderateScale(60),
+  borderRightWidth: moderateScale(60),
+  borderBottomWidth: 0,
+  borderLeftWidth: 0,
+  borderTopColor: "#E1F4FF",
+  borderRightColor: "transparent",
+  transform: [{ rotate: "180deg" }], // 🔁 Add this line
+},
+triangle3: {
+  position: "absolute",
+  bottom: 10,
+  left: 10,
+  width: 0,
+  height: 0,
+  borderStyle: "solid",
+  borderTopWidth: moderateScale(60),
+  borderRightWidth: moderateScale(60),
+  borderBottomWidth: 0,
+  borderLeftWidth: 0,
+  borderTopColor: "#E1F4FF",
+  borderRightColor: "transparent",
+  transform: [{ rotate: "270deg" }], // 🔁 Add this line
+},
+triangle4: {
+  position: "absolute",
+  top: 10,
+  right: 10,
+  width: 0,
+  height: 0,
+  borderStyle: "solid",
+  borderTopWidth: moderateScale(60),
+  borderRightWidth: moderateScale(60),
+  borderBottomWidth: 0,
+  borderLeftWidth: 0,
+  borderTopColor: "#E1F4FF",
+  borderRightColor: "transparent",
+  transform: [{ rotate: "90deg" }], // 🔁 Add this line
+},
+  overviewHeader: {
     flexDirection: "row",
     alignItems: "center",
+    marginBottom: verticalScale(24),
+    paddingBottom: verticalScale(0),
+    borderBottomWidth: 1,
+    borderBottomColor: "#E8ECEF",
+  },
+  overviewTitle: {
+    fontSize: moderateScale(20),
+    fontWeight: "700",
+    marginLeft: horizontalScale(12),
+    letterSpacing: 0.5,
+  },
+  statsRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+    paddingVertical: verticalScale(10),
+  },
+  statItem: {
+    alignItems: "center",
+    flex: 1,
+  },
+  statNumber: {
+    fontSize: moderateScale(28),
+    fontWeight: "700",
+    color: "#035F91",
     marginBottom: verticalScale(8),
   },
-  dot: {
-    width: moderateScale(10),
-    height: moderateScale(10),
-    borderRadius: moderateScale(5),
-    marginRight: horizontalScale(6),
-  },
-  labelText: {
-    fontSize: moderateScale(12),
-    flexShrink: 1,
-    minHeight: verticalScale(50),
-  },
-  valueText: {
-    fontSize: moderateScale(20),
-    fontWeight: "bold",
-    color: "#000",
-  },
-  refreshButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: verticalScale(8),
-    paddingHorizontal: horizontalScale(16),
-    backgroundColor: "#E1F4FF",
-    borderRadius: moderateScale(20),
-    alignSelf: "center",
-  },
-  refreshText: {
-    marginLeft: horizontalScale(8),
-    fontSize: moderateScale(14),
-    color: "#035F91",
+  statLabel: {
+    fontSize: moderateScale(13),
+    textAlign: "center",
     fontWeight: "500",
+    opacity: 0.9,
+    height: verticalScale(50),
+  },
+  progressCircle: {
+    width: moderateScale(60),
+    height: moderateScale(60),
+    borderRadius: moderateScale(30),
+    backgroundColor: "#035F91",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: verticalScale(8),
+    borderWidth: 2,
+    borderColor: "#026D94",
+  },
+  progressText: {
+    fontSize: moderateScale(16),
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  verticalDivider: {
+    width: 1,
+    height: verticalScale(50),
+    backgroundColor: "#E8ECEF",
+    marginHorizontal: horizontalScale(15),
   },
   loadingContainer: {
     flex: 1,
@@ -725,18 +799,18 @@ const styles = StyleSheet.create({
   },
   attendanceCard: {
     backgroundColor: "#fff",
-    borderRadius: moderateScale(12),
+    borderRadius: moderateScale(7),
     padding: moderateScale(12),
     marginTop: verticalScale(12),
-    elevation: 3,
+    elevation:2,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: verticalScale(2) },
     shadowOpacity: 0.1,
     shadowRadius: moderateScale(4),
-    borderLeftWidth: 3,
+    borderLeftWidth: 4,
   },
   sectionDetails: {
-    fontSize: moderateScale(17),
+    fontSize: moderateScale(18),
     fontWeight: "800",
   },
   activities: {
@@ -797,7 +871,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-start",
-    gap:7
+    gap: 7,
   },
   timeText: {
     marginLeft: horizontalScale(6),
@@ -818,6 +892,7 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(8),
     alignItems: "center",
     justifyContent: "center",
+    marginBottom:60
   },
   loadMoreContainer: {
     flexDirection: "row",
