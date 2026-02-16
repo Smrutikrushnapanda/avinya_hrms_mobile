@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage"; // Import AsyncStorage
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -36,9 +37,24 @@ const Login = () => {
 
   const { setAuth, initializeAuth } = useAuthStore();
 
-  // Initialize auth state on component mount
+  // Load saved credentials on component mount
   useEffect(() => {
-    initializeAuth();
+    const loadCredentials = async () => {
+      try {
+        const savedRememberMe = await AsyncStorage.getItem("rememberMe");
+        if (savedRememberMe === "true") {
+          setRememberMe(true);
+          const savedUserId = await AsyncStorage.getItem("lastUserId");
+          const savedPassword = await AsyncStorage.getItem("lastPassword");
+          if (savedUserId) setUserId(savedUserId);
+          if (savedPassword) setPassword(savedPassword);
+        }
+        initializeAuth();
+      } catch (error) {
+        console.error("Error loading credentials:", error);
+      }
+    };
+    loadCredentials();
   }, []);
 
   const validateInputs = () => {
@@ -78,6 +94,18 @@ const Login = () => {
 
       // Use Zustand store to set auth data
       await setAuth({ access_token, user });
+
+      // Save credentials if "Remember Me" is checked
+      if (rememberMe) {
+        await AsyncStorage.setItem("lastUserId", userId);
+        await AsyncStorage.setItem("lastPassword", password);
+        await AsyncStorage.setItem("rememberMe", "true");
+      } else {
+        // Clear saved credentials if "Remember Me" is unchecked
+        await AsyncStorage.removeItem("lastUserId");
+        await AsyncStorage.removeItem("lastPassword");
+        await AsyncStorage.setItem("rememberMe", "false");
+      }
 
       router.replace("/(tabs)");
     } catch (error) {
@@ -208,7 +236,7 @@ const Login = () => {
             </View>
 
             <View style={styles.optionsContainer}>
-              {/* <TouchableOpacity
+              <TouchableOpacity
                 style={styles.checkboxContainer}
                 onPress={() => setRememberMe(!rememberMe)}
               >
@@ -229,7 +257,7 @@ const Login = () => {
                 <Text style={[styles.checkboxLabel, { color: colors.text }]}>
                   Remember Me
                 </Text>
-              </TouchableOpacity> */}
+              </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={() => router.push("/(auth)/Forgetpassword")}
@@ -295,14 +323,6 @@ const styles = StyleSheet.create({
     borderRadius: horizontalScale(180),
     top: verticalScale(-90),
     right: horizontalScale(-110),
-  },
-  bottomCurve: {
-    position: "absolute",
-    width: horizontalScale(480),
-    height: verticalScale(240),
-    borderRadius: horizontalScale(240),
-    bottom: verticalScale(-120),
-    left: horizontalScale(-40),
   },
   logoContainer: {
     alignItems: "center",
@@ -384,7 +404,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  checkboxChecked: {},
   checkboxLabel: {
     fontSize: moderateScale(14),
   },

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "198633016452",
+    "project_id": "avinyahrms",
+    "storage_bucket": "avinyahrms.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:198633016452:android:64b5cc3e2f64d2002686d1",
+        "android_client_info": {
+          "package_name": "com.smrutipanda.HRMS"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCpDXP6RNLeKgGJnvnmtoqHeHe89bkSGvw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

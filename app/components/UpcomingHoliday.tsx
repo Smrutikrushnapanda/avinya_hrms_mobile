@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
+import UpcomingHolidaySkeleton from "app/Loaders/UpcomingHolidaySkeleton";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Dimensions,
   FlatList,
@@ -10,15 +10,15 @@ import {
   Text,
   TouchableOpacity,
   useColorScheme,
-  View,
+  View
 } from "react-native";
 import { getHolidaysByFinancialYear } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
 import { darkTheme, lightTheme } from "../constants/colors";
 
 const { width: screenWidth } = Dimensions.get('window');
-const CARD_WIDTH = screenWidth - 40; // Full width minus padding
-const router=useRouter();
+const CARD_WIDTH = screenWidth - 60; // Full width minus padding
+const router = useRouter();
 
 const UpcomingHoliday = () => {
   const colorScheme = useColorScheme() ?? "light";
@@ -126,6 +126,8 @@ const UpcomingHoliday = () => {
           styles.holidayCard,
           {
             backgroundColor: colors.background,
+            borderColor: item.isOptional ? "#FF8C00" : "#4A90E2", // Blue for public, orange for restricted
+            borderWidth: 1,
           },
         ]}
         activeOpacity={0.8}
@@ -175,41 +177,34 @@ const UpcomingHoliday = () => {
 
         {/* Body Section */}
         <View style={styles.cardBody}>
-  <View style={styles.nameAndCountdown}>
-    <Text
-      style={[styles.holidayName, { color: colors.text }]}
-      numberOfLines={2}
-      ellipsizeMode="tail"
-    >
-      {item.name}
-    </Text>
-
-    <View style={styles.countdownContainer}>
-      <Ionicons 
-        name="time-outline" 
-        size={14} 
-        color="#666" 
-        style={styles.clockIcon}
-      />
-      <Text style={styles.daysRemaining}>
-        {daysRemaining}
-      </Text>
-    </View>
-  </View>
-
-</View>
-
+          <View style={styles.nameAndCountdown}>
+            <Text
+              style={[styles.holidayName, { color: colors.text }]}
+              numberOfLines={1}
+            >
+              {item.name.length > 20 ? item.name.slice(0, 20) + "..." : item.name}
+            </Text>
+            <View style={styles.countdownContainer}>
+              <Ionicons 
+                name="time-outline" 
+                size={14} 
+                color="#666" 
+                style={styles.clockIcon}
+              />
+              <Text style={styles.daysRemaining}>
+                {daysRemaining}
+              </Text>
+            </View>
+          </View>
+        </View>
       </TouchableOpacity>
     );
   };
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.text }]}>
-          Loading holidays...
-        </Text>
+      <View>
+        <UpcomingHolidaySkeleton />
       </View>
     );
   }
@@ -232,10 +227,10 @@ const UpcomingHoliday = () => {
           Upcoming Holidays
         </Text>
         <TouchableOpacity onPress={() => router.push("/ViewAllHolidays")}>
-  <Text style={[styles.viewAllText, { color: colors.primary }]}>
-    View All
-  </Text>
-</TouchableOpacity>
+          <Text style={[styles.viewAllText, { color: colors.primary }]}>
+            View All
+          </Text>
+        </TouchableOpacity>
       </View>
       <FlatList
         data={upcomingHolidays}
@@ -255,8 +250,7 @@ const UpcomingHoliday = () => {
 
 const styles = StyleSheet.create({
   container: {
-    // marginTop: 5,
-    marginBottom:25
+    marginBottom: 25,
   },
   header: {
     flexDirection: "row",
@@ -278,7 +272,7 @@ const styles = StyleSheet.create({
   },
   holidayCard: {
     width: CARD_WIDTH,
-    height: 140,
+    height: 120, // Reduced from 140
     borderRadius: 20,
     padding: 0,
     marginRight: 12,
@@ -304,8 +298,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    padding: 20,
-    paddingBottom: 12,
+    padding: 12, // Reduced from 20
+    paddingBottom: 8, // Reduced from 12
   },
   leftSection: {
     flexDirection: "row",
@@ -315,9 +309,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   dayText: {
-    fontSize: 28,
+    fontSize: 24, // Reduced from 28
     fontWeight: "800",
-    lineHeight: 32,
+    lineHeight: 28, // Reduced from 32
   },
   monthBadge: {
     paddingHorizontal: 8,
@@ -353,15 +347,15 @@ const styles = StyleSheet.create({
   },
   cardBody: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingHorizontal: 12, // Reduced from 20
+    paddingBottom: 12, // Reduced from 20
     justifyContent: "space-between",
   },
   holidayName: {
-    fontSize: 18,
+    fontSize: 16, // Reduced from 18
     fontWeight: "700",
-    lineHeight: 22,
-    marginBottom: 12,
+    lineHeight: 20, // Reduced from 22
+    marginBottom: 8, // Reduced from 12
   },
   footerSection: {
     flexDirection: "row",
@@ -372,15 +366,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(0,0,0,0.05)",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingHorizontal: 8, // Reduced from 10
+    paddingVertical: 4, // Reduced from 6
+    borderRadius: 10, // Reduced from 12
   },
   clockIcon: {
     marginRight: 4,
   },
   daysRemaining: {
-    fontSize: 12,
+    fontSize: 10, // Reduced from 12
     fontWeight: "600",
     color: "#666",
   },
@@ -404,11 +398,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   nameAndCountdown: {
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 10,
-},
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+  },
 });
 
 export default UpcomingHoliday;

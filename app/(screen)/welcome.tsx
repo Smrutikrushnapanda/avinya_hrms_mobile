@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
   Image,
   StyleSheet,
   Text,
@@ -10,54 +11,72 @@ import {
   View,
 } from "react-native";
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
-import useAuthStore from "../../store/useUserStore"; // Adjust path as needed
+import { getActiveNotices } from "../../api/api";
+import useAuthStore from "../../store/useUserStore";
+import OndemandNotifications from "../components/OndemandNotifications";
 import { darkTheme, lightTheme } from "../constants/colors";
+
+const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 const Welcome = () => {
   const colorScheme = useColorScheme() ?? "light";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
-
-  // Get auth store functions and state
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [noticeData, setNoticeData] = useState(null);
   const { isAuthenticated, initializeAuth } = useAuthStore();
 
   useEffect(() => {
-    checkAuthStatus();
+    checkAuthAndNotices();
   }, []);
 
-  const checkAuthStatus = async () => {
+  const checkAuthAndNotices = async () => {
     try {
-      // Initialize auth from AsyncStorage
       await initializeAuth();
-
-      // Check if user is authenticated after initialization
       const authState = useAuthStore.getState();
-
       if (authState.isAuthenticated && authState.accessToken) {
-        // User is authenticated, navigate to home screen
-        router.replace("/(tabs)"); // Adjust the route according to your app structure
+        const response = await getActiveNotices();
+        const notice = response.data;
+        if (
+          notice &&
+          notice.start_at &&
+          notice.end_at &&
+          notice.title &&
+          notice.message &&
+          notice.bg_image_url
+        ) {
+          const nowDate = new Date().toISOString().split("T")[0];
+          const start = new Date(notice.start_at).toISOString().split("T")[0];
+          const end = new Date(notice.end_at).toISOString().split("T")[0];
+          const isNoticeActive = start <= nowDate && nowDate <= end;
+          if (isNoticeActive) {
+            setNoticeData(notice);
+            setShowNotifications(true);
+            setIsLoading(false);
+          } else {
+            router.replace("/(tabs)");
+          }
+        } else {
+          router.replace("/(tabs)");
+        }
       } else {
-        // User is not authenticated, stay on welcome screen
         setIsLoading(false);
       }
     } catch (error) {
-      console.error("Error checking auth status:", error);
-      // If there's an error, show welcome screen
+      console.error("Error checking auth or notices:", error);
       setIsLoading(false);
     }
   };
 
-  // Show loading indicator while checking token
+  const handleNotificationsClose = () => {
+    setShowNotifications(false);
+    router.replace("/(tabs)");
+  };
+
   if (isLoading) {
     return (
-      <View
-        style={[
-          styles.container,
-          styles.loadingContainer,
-          { backgroundColor: colors.background },
-        ]}
-      >
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={[styles.loadingText, { color: colors.text }]}>
           Loading...
@@ -67,60 +86,77 @@ const Welcome = () => {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Logo Section */}
-      <View style={styles.logoContainer}>
-        <Image
-          source={require("../../assets/images/logo.png")} // Adjust path as needed
-          style={styles.logo}
-          resizeMode="contain"
-        />
-      </View>
+    <>
+      <OndemandNotifications
+        isVisible={showNotifications}
+        onClose={handleNotificationsClose}
+      />
+      {!showNotifications && (
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+          {/* Background decoration - optional */}
+          <View style={styles.backgroundDecoration}>
+            <View style={styles.circle1} />
+            <View style={styles.circle2} />
+          </View>
 
-      {/* Main Image Section */}
-      <View style={styles.imageContainer}>
-        <Image
-          source={require("../../assets/images/welcome-main.png")} // Adjust path as needed
-          style={styles.mainImage}
-          resizeMode="contain"
-        />
-      </View>
+          {/* Content Container */}
+          <View style={styles.contentContainer}>
+            {/* Logo Section */}
+            <View style={styles.logoContainer}>
+              <Image
+                source={require("../../assets/images/logo.png")}
+                style={styles.logo}
+                resizeMode="contain"
+              />
+            </View>
 
-      {/* Welcome message box */}
-      <View style={[styles.welcomemsg, { backgroundColor: colors.white }]}>
-        <View>
-          <Text style={[styles.welcomeText, { color: colors.text }]}>
-            Welcome
-          </Text>
-          <Text style={[styles.welcomemessage, { color: colors.text }]}>
-            Abhinya is a modern attendance management system designed to
-            simplify how institutions and organizations track presence, time,
-            and productivity.
-          </Text>
+            {/* Main Content */}
+            <View style={styles.mainContent}>
+              {/* Illustration */}
+              <View style={styles.illustrationContainer}>
+                <Image
+                  source={require("../../assets/images/welcome-main.png")}
+                  style={styles.illustration}
+                  resizeMode="contain"
+                />
+              </View>
+
+              {/* Text Content */}
+              <View style={styles.textContent}>
+                <Text style={[styles.title, { color: colors.text }]}>
+                  Welcome to Abhinya
+                </Text>
+                <Text style={[styles.description, { color: colors.text }]}>
+                  A modern attendance management system designed to simplify how institutions
+                  and organizations track presence, time, and productivity.
+                </Text>
+              </View>
+
+              {/* Button */}
+              <View style={styles.buttonContainer}>
+                <TouchableOpacity
+                  style={[styles.button, { backgroundColor: colors.primary }]}
+                  onPress={() => router.push("/(auth)/Login")}
+                >
+                  <Text style={[styles.buttonText, { color: colors.white }]}>
+                    Get Started
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
         </View>
-
-        {/* Get Started Button */}
-        <TouchableOpacity
-          style={[styles.btn, { backgroundColor: colors.primary }]}
-          onPress={() => router.push("/(auth)/Login")}
-        >
-          <Text style={[styles.btnText, { color: colors.white }]}>
-            Get Started
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+      )}
+    </>
   );
 };
-
-export default Welcome;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "space-between",
   },
   loadingContainer: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
     gap: moderateScale(20),
@@ -129,51 +165,97 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(16),
     fontWeight: "500",
   },
+  backgroundDecoration: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    overflow: 'hidden',
+    opacity: 0.1,
+  },
+  circle1: {
+    position: 'absolute',
+    width: screenWidth * 0.6,
+    height: screenWidth * 0.6,
+    borderRadius: screenWidth * 0.3,
+    backgroundColor: '#4a90e2',
+    top: -screenWidth * 0.2,
+    right: -screenWidth * 0.1,
+  },
+  circle2: {
+    position: 'absolute',
+    width: screenWidth * 0.4,
+    height: screenWidth * 0.4,
+    borderRadius: screenWidth * 0.2,
+    backgroundColor: '#4a90e2',
+    bottom: -screenWidth * 0.1,
+    left: -screenWidth * 0.05,
+  },
+  contentContainer: {
+    flex: 1,
+    paddingHorizontal: horizontalScale(20),
+    paddingTop: verticalScale(40),
+    paddingBottom: verticalScale(30),
+  },
   logoContainer: {
     alignItems: "center",
-    marginTop: verticalScale(50),
+    marginBottom: verticalScale(30),
   },
   logo: {
-    width: horizontalScale(250),
-    height: verticalScale(100),
+    width: horizontalScale(200),
+    height: verticalScale(80),
   },
-  imageContainer: {
+  mainContent: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  illustrationContainer: {
     alignItems: "center",
-    marginTop: verticalScale(30),
+    flex: 0.6,
+    justifyContent: 'center',
   },
-  mainImage: {
-    height: verticalScale(300),
-    width: "100%",
+  illustration: {
+    width: '100%',
+    aspectRatio: 1, // Adjust based on your actual image ratio
+    resizeMode: 'contain',
   },
-  welcomemsg: {
-    height: horizontalScale(350),
-    width: "100%",
-    borderTopRightRadius: moderateScale(40),
-    borderTopLeftRadius: moderateScale(40),
-    padding: moderateScale(40),
-    justifyContent: "space-between",
+  textContent: {
+    flex: 0.3,
+    paddingHorizontal: horizontalScale(10),
   },
-  welcomeText: {
-    fontSize: moderateScale(24),
-    fontWeight: "600",
+  title: {
+    fontSize: moderateScale(28),
+    fontWeight: "700",
+    marginBottom: verticalScale(10),
+    textAlign: 'center',
   },
-  welcomemessage: {
+  description: {
     fontSize: moderateScale(16),
-    textAlign: "left",
-    paddingTop: verticalScale(20),
-    // flex: 1,
-    fontWeight: "400",
+    textAlign: "center",
+    lineHeight: moderateScale(24),
+    color: '#666', // Subtle gray for description
+    marginBottom: verticalScale(30),
   },
-  btn: {
-    paddingVertical: moderateScale(14),
-    paddingHorizontal: moderateScale(20),
-    borderRadius: moderateScale(10),
+  buttonContainer: {
+    marginBottom: verticalScale(40),
+    alignItems: 'center',
+  },
+  button: {
+    paddingVertical: moderateScale(15),
+    paddingHorizontal: moderateScale(40),
+    borderRadius: moderateScale(12),
     alignItems: "center",
-    elevation: moderateScale(5),
+    elevation: moderateScale(3),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    width: '80%',
   },
-  btnText: {
-    fontSize: 18,
+  buttonText: {
+    fontSize: moderateScale(18),
     fontWeight: "600",
-    letterSpacing: 0.5,
+    letterSpacing: moderateScale(0.5),
   },
 });
+
+export default Welcome;

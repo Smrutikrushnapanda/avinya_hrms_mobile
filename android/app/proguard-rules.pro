@@ -11,4 +11,12 @@
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
 
+# ✅ Firebase and Google Play Services (avoid stripping required classes)
+-keep class com.google.firebase.** { *; }
+-keep class com.google.android.gms.** { *; }
+
+# (Optional but recommended) Keep FCM Receiver
+-keep class com.google.firebase.messaging.FirebaseMessagingService { *; }
+-keep class com.google.firebase.iid.FirebaseInstanceIdReceiver { *; }
+
 # Add any project specific keep options here:

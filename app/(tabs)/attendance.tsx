@@ -1,15 +1,21 @@
-import { FontAwesome } from "@expo/vector-icons";
+import { AntDesign, FontAwesome, Ionicons } from "@expo/vector-icons";
 import Header from "app/components/Header";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Dimensions,
+  Image,
+  LayoutAnimation,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  UIManager,
   View,
   useColorScheme,
 } from "react-native";
@@ -19,13 +25,21 @@ import {
   horizontalScale,
   moderateScale,
   verticalScale,
-} from "../../utils/metrics";
+} from "utils/metrics";
 import { darkTheme, lightTheme } from "../constants/colors";
+import AttendanceSkeleton from "../Loaders/AttendanceSkeleton";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
 const Attendance = () => {
   const colorScheme = useColorScheme() ?? "light";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
   const { user } = useAuthStore();
+  const currentDate = new Date();
 
   const [attendanceData, setAttendanceData] = useState<any[]>([]);
   const [displayedItems, setDisplayedItems] = useState<any[]>([]);
@@ -36,10 +50,11 @@ const Attendance = () => {
   const [hasMoreData, setHasMoreData] = useState<boolean>(true);
   const [totalWorkingDays, setTotalWorkingDays] = useState<number>(0);
   const [employeeWorkingDays, setEmployeeWorkingDays] = useState<number>(0);
+  const [showPhotoModal, setShowPhotoModal] = useState<boolean>(false);
+  const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null);
   const [showMonthPicker, setShowMonthPicker] = useState<boolean>(false);
-
-  // Month and year state
-  const currentDate = new Date();
+  const [pickerYear, setPickerYear] = useState<number>(currentDate.getFullYear());
+  const rotateAnim = useRef(new Animated.Value(0)).current;
   const [selectedMonth, setSelectedMonth] = useState<number>(
     currentDate.getMonth() + 1
   );
@@ -49,7 +64,6 @@ const Attendance = () => {
 
   const ITEMS_PER_PAGE = 5;
 
-  // Month names for display
   const monthNames = [
     "January",
     "February",
@@ -65,12 +79,18 @@ const Attendance = () => {
     "December",
   ];
 
-  // Generate only 2025
   const generateYears = () => {
-    return [2025];
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let y = currentYear; y >= currentYear - 3; y--) {
+      years.push(y);
+    }
+    if (!years.includes(selectedYear)) {
+      years.unshift(selectedYear);
+    }
+    return years;
   };
 
-  // Function to format date to "Day, Mon DD, YYYY" format
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
     const options: Intl.DateTimeFormatOptions = {
@@ -82,66 +102,125 @@ const Attendance = () => {
     return date.toLocaleDateString("en-US", options);
   };
 
-  // Function to get badge color and text based on status
   const getBadgeProps = (status: string, isSunday: boolean) => {
     if (isSunday) {
-      return { color: "#800094", text: "Sunday" };
+      return { color: "#026D94", text: "Sunday" };
     }
-    switch (status?.toLowerCase()) {
+    
+    const statusLower = status?.toLowerCase();
+    
+    switch (statusLower) {
       case "absent":
         return { color: "#FF4444", text: "Absent" };
       case "late":
-        return { color: "#FFBB33", text: "Half Day" };
+        return { color: "#FFBB33", text: "Late" };
       case "halfday":
       case "half_day":
-        return { color: "#00B8D9", text: "Half Day" };
+      case "half-day":
+        return { color: "#e67b00ff", text: "Half Day" };
       case "present":
         return { color: "#00C851", text: "Present" };
       case "holiday":
         return { color: "#9C27B0", text: "Holiday" };
+      case "pending":
+        return { color: "#FFA500", text: "Pending" };
       default:
-        return { color: "#00C851", text: "Present" };
+        const capitalizedStatus = status?.charAt(0).toUpperCase() + status?.slice(1).toLowerCase();
+        return { color: "#FFA500", text: capitalizedStatus || "Unknown" };
     }
   };
 
-  // Function to sort attendance data - latest first, with priority for late entries
+  const getIconProps = (status: string, isSunday: boolean, isHoliday: boolean) => {
+    if (isHoliday) {
+      return {
+        name: "gift",
+        color: "#9C27B0",
+        backgroundColor: "#F3E5F5"
+      };
+    }
+    
+    if (isSunday) {
+      return {
+        name: "sun-o",
+        color: "#026D94",
+        backgroundColor: "#E1F4FF"
+      };
+    }
+    
+    const statusLower = status?.toLowerCase();
+    
+    switch (statusLower) {
+      case "absent":
+        return {
+          name: "times-circle",
+          color: "#FF4444",
+          backgroundColor: "#FFE6E6"
+        };
+      case "late":
+        return {
+          name: "clock-o",
+          color: "#FFBB33",
+          backgroundColor: "#FFF4E0"
+        };
+      case "halfday":
+      case "half_day":
+      case "half-day":
+        return {
+          name: "adjust",
+          color: "#e67b00ff",
+          backgroundColor: "#FFF0E6"
+        };
+      case "present":
+        return {
+          name: "check-circle",
+          color: "#00C851",
+          backgroundColor: "#E8F5E8"
+        };
+      case "holiday":
+        return {
+          name: "gift",
+          color: "#9C27B0",
+          backgroundColor: "#F3E5F5"
+        };
+      case "pending":
+        return {
+          name: "hourglass-half",
+          color: "#FFA500",
+          backgroundColor: "#FFF4E0"
+        };
+      default:
+        return {
+          name: "question-circle",
+          color: "#FFA500",
+          backgroundColor: "#FFF4E0"
+        };
+    }
+  };
+
   const sortAttendanceData = (data: any[]) => {
     return data.sort((a, b) => {
       const dateA = new Date(a.originalDate || a.date);
       const dateB = new Date(b.originalDate || b.date);
-
-      // First sort by date (latest first)
       const dateComparison = dateB.getTime() - dateA.getTime();
-
-      // If dates are the same, prioritize late entries
       if (dateComparison === 0) {
         const aIsLate = a.status?.toLowerCase() === "late";
         const bIsLate = b.status?.toLowerCase() === "late";
-
         if (aIsLate && !bIsLate) return -1;
         if (!aIsLate && bIsLate) return 1;
         return 0;
       }
-
       return dateComparison;
     });
   };
 
-  // Calculate total working days from 1st to yesterday (excluding Sundays and mandatory holidays)
   const calculateWorkingDays = (records: any[]) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const year = selectedYear;
-    const month = selectedMonth - 1; // JavaScript months are 0-indexed
+    const month = selectedMonth - 1;
     const workingDays: Date[] = [];
-
-    // Get the last day of the selected month
     const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
-
-    // If it's current month, only count up to yesterday, otherwise count full month
-    const isCurrentMonth =
-      year === today.getFullYear() && month === today.getMonth();
-    const endDay = isCurrentMonth ? today.getDate() : lastDayOfMonth + 1;
+    const endDay = lastDayOfMonth + 1;
 
     for (let day = 1; day < endDay; day++) {
       const date = new Date(year, month, day);
@@ -156,7 +235,6 @@ const Attendance = () => {
         );
         return recordDate.toISOString().split("T")[0] === dateStr;
       });
-
       const isHoliday = match?.isHoliday;
       const isOptionalHoliday = match?.isOptionalHoliday;
       const isSunday = date.getDay() === 0;
@@ -166,12 +244,9 @@ const Attendance = () => {
     return actualWorkingDays.length;
   };
 
-  // Function to load more items (lazy loading)
   const loadMoreItems = useCallback(() => {
     if (loadingMore || !hasMoreData) return;
-
     setLoadingMore(true);
-
     const startIndex = currentPage * ITEMS_PER_PAGE;
     const endIndex = startIndex + ITEMS_PER_PAGE;
     const newItems = attendanceData.slice(startIndex, endIndex);
@@ -180,8 +255,6 @@ const Attendance = () => {
       if (newItems.length > 0) {
         setDisplayedItems((prev) => [...prev, ...newItems]);
         setCurrentPage((prev) => prev + 1);
-
-        // Check if there are more items to load
         if (endIndex >= attendanceData.length) {
           setHasMoreData(false);
         }
@@ -189,13 +262,11 @@ const Attendance = () => {
         setHasMoreData(false);
       }
       setLoadingMore(false);
-    }, 500); // Small delay to show loading state
+    }, 500);
   }, [attendanceData, currentPage, loadingMore, hasMoreData]);
 
-  // Fetch attendance data
   const fetchAttendanceData = async () => {
     if (!user?.userId || !user?.organizationId) {
-      Alert.alert("Error", "User information not found");
       setLoading(false);
       return;
     }
@@ -209,9 +280,7 @@ const Attendance = () => {
         user.organizationId
       );
 
-      // Handle response - check if it's an array or object
       let attendanceRecords = [];
-
       if (Array.isArray(response.data)) {
         attendanceRecords = response.data;
       } else if (response.data && response.data.success && response.data.data) {
@@ -224,11 +293,8 @@ const Attendance = () => {
         return;
       }
 
-      // Get current date for comparison (ignoring time)
       const today = new Date();
-      today.setHours(0, 0, 0, 0); // Normalize to midnight for comparison
-
-      // Only filter out future dates if we're viewing the current month
+      today.setHours(0, 0, 0, 0);
       const isCurrentMonth =
         selectedYear === today.getFullYear() &&
         selectedMonth === today.getMonth() + 1;
@@ -236,40 +302,34 @@ const Attendance = () => {
       const filteredRecords = isCurrentMonth
         ? attendanceRecords.filter((record: any) => {
             const recordDate = new Date(record.date || record.attendanceDate);
-            recordDate.setHours(0, 0, 0, 0); // Normalize to midnight
-            return recordDate < today;
+            recordDate.setHours(0, 0, 0, 0);
+            return recordDate <= today;
           })
-        : attendanceRecords; // Show all records for past months
+        : attendanceRecords;
 
-      // Transform the data to match the expected format
       const transformedData = filteredRecords.map((record: any) => ({
         originalDate: record.date || record.attendanceDate,
         date: formatDate(record.date || record.attendanceDate),
         inTime: record.inTime || record.checkInTime || record.clockIn || null,
-        outTime:
-          record.outTime || record.checkOutTime || record.clockOut || null,
+        outTime: record.outTime || record.checkOutTime || record.clockOut || null,
+        inPhotoUrl: record.inPhotoUrl || null,
+        outPhotoUrl: record.outPhotoUrl || null,
         status: record.status || record.attendanceStatus || "present",
         isHoliday: record.isHoliday || false,
         isSunday: record.isSunday || false,
         isOptionalHoliday: record.isOptionalHoliday || false,
       }));
 
-      // Sort the data - latest first, with priority for late entries
       const sortedData = sortAttendanceData(transformedData);
       setAttendanceData(sortedData);
-
-      // Reset pagination state
       setCurrentPage(0);
       setDisplayedItems([]);
       setHasMoreData(true);
-
-      // Load initial items
       const initialItems = sortedData.slice(0, ITEMS_PER_PAGE);
       setDisplayedItems(initialItems);
       setCurrentPage(1);
       setHasMoreData(sortedData.length > ITEMS_PER_PAGE);
 
-      // Calculate working days statistics
       const presentDays = transformedData.filter(
         (record: any) => record.status?.toLowerCase() === "present"
       ).length;
@@ -285,21 +345,15 @@ const Attendance = () => {
       setTotalWorkingDays(calculateWorkingDays(transformedData));
     } catch (error) {
       console.error("Error fetching attendance:", error);
-      Alert.alert(
-        "Error",
-        error.response?.data?.message || "Failed to fetch attendance"
-      );
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch data on component mount and when month/year changes
   useEffect(() => {
     fetchAttendanceData();
   }, [user?.userId, user?.organizationId, selectedMonth, selectedYear]);
 
-  // Function to handle refresh
   const handleRefresh = async () => {
     setRefreshing(true);
     setCurrentPage(0);
@@ -309,104 +363,80 @@ const Attendance = () => {
     setRefreshing(false);
   };
 
-  // Handle month selection
-  const handleMonthYearSelect = (month: number, year: number) => {
+  const toggleMonthPicker = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    const toValue = showMonthPicker ? 0 : 1;
+    Animated.timing(rotateAnim, {
+      toValue,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+    if (!showMonthPicker) {
+      setPickerYear(selectedYear);
+    }
+    setShowMonthPicker(!showMonthPicker);
+  };
+
+  const handleMonthSelect = (month: number) => {
     setSelectedMonth(month);
-    setSelectedYear(year);
+    setSelectedYear(pickerYear);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    Animated.timing(rotateAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
     setShowMonthPicker(false);
   };
 
-  // Calculate attendance percentage
+  const chevronRotation = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "180deg"],
+  });
+
+  const handlePhotoClick = (photoUrl: string | null) => {
+    if (photoUrl) {
+      setSelectedPhotoUrl(photoUrl);
+      setShowPhotoModal(true);
+    } else {
+      Alert.alert("No Photo", "No photo available for this time.");
+    }
+  };
+
   const attendancePercentage = totalWorkingDays
     ? ((employeeWorkingDays / totalWorkingDays) * 100).toFixed(1)
     : "0.0";
 
-  // Month Picker Modal Component
-  const MonthPickerModal = () => (
+  const PhotoModal = () => (
     <Modal
-      visible={showMonthPicker}
+      visible={showPhotoModal}
       transparent={true}
       animationType="fade"
-      onRequestClose={() => setShowMonthPicker(false)}
+      onRequestClose={() => setShowPhotoModal(false)}
     >
-      <View style={styles.modalOverlay}>
-        <View
-          style={[styles.modalContainer, { backgroundColor: colors.white }]}
+      <View style={styles.modalContainer}>
+        <TouchableOpacity
+          style={styles.modalCloseButton}
+          onPress={() => setShowPhotoModal(false)}
         >
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              Select Month
-            </Text>
-            <TouchableOpacity
-              onPress={() => setShowMonthPicker(false)}
-              style={styles.closeButton}
-            >
-              <FontAwesome name="times" size={20} color="#666" />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.modalContent}>
-            {generateYears().map((year) => (
-              <View key={year} style={styles.yearSection}>
-                <Text style={[styles.yearTitle, { color: colors.text }]}>
-                  {year}
-                </Text>
-                <View style={styles.monthGrid}>
-                  {monthNames.map((monthName, index) => {
-                    const monthNumber = index + 1;
-                    const isSelected =
-                      selectedMonth === monthNumber && selectedYear === year;
-                    const isFutureMonth =
-                      year === currentDate.getFullYear() &&
-                      monthNumber > currentDate.getMonth() + 1;
-
-                    return (
-                      <TouchableOpacity
-                        key={monthNumber}
-                        style={[
-                          styles.monthButton,
-                          isSelected && styles.selectedMonthButton,
-                          isFutureMonth && styles.disabledMonthButton,
-                        ]}
-                        onPress={() =>
-                          !isFutureMonth &&
-                          handleMonthYearSelect(monthNumber, year)
-                        }
-                        disabled={isFutureMonth}
-                      >
-                        <Text
-                          style={[
-                            styles.monthButtonText,
-                            isSelected && styles.selectedMonthButtonText,
-                            isFutureMonth && styles.disabledMonthButtonText,
-                          ]}
-                        >
-                          {monthName.substring(0, 3)}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
+          <AntDesign name="close" size={30} color="#fff" />
+        </TouchableOpacity>
+        <Image
+          source={{
+            uri: selectedPhotoUrl || "https://cdn-icons-png.flaticon.com/512/9187/9187532.png",
+          }}
+          style={styles.modalImage}
+          resizeMode="contain"
+          onError={(error) => {
+            console.log("Modal image load error:", error);
+          }}
+        />
       </View>
     </Modal>
   );
 
   if (loading) {
-    return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Header title="Attendance" />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#035F91" />
-          <Text style={[styles.loadingText, { color: colors.text }]}>
-            Loading attendance data...
-          </Text>
-        </View>
-      </View>
-    );
+    return <AttendanceSkeleton colors={colors} />;
   }
 
   return (
@@ -414,22 +444,11 @@ const Attendance = () => {
       <Header title="Attendance" />
       <View style={styles.cardWrapper}>
         <View style={[styles.card, { backgroundColor: colors.white }]}>
-          {/* Decorative Triangle */}
           <View style={styles.triangle} />
-<View style={styles.triangle2} />
-<View style={styles.triangle3} />
-<View style={styles.triangle4} />
-          {/* Attendance Overview Header */}
-          <View style={styles.overviewHeader}>
-            <FontAwesome name="bar-chart" size={24} color="#035F91" />
-            <Text style={[styles.overviewTitle, { color: colors.text }]}>
-              Attendance Overview
-            </Text>
-          </View>
-
-          {/* Stats Row */}
+          <View style={styles.triangle2} />
+          <View style={styles.triangle3} />
+          <View style={styles.triangle4} />
           <View style={styles.statsRow}>
-            {/* Attendance Percentage Circle */}
             <View style={styles.statItem}>
               <View style={styles.progressCircle}>
                 <Text style={styles.progressText}>{attendancePercentage}%</Text>
@@ -438,10 +457,7 @@ const Attendance = () => {
                 Attendance Rate
               </Text>
             </View>
-
             <View style={styles.verticalDivider} />
-
-            {/* Total Working Days */}
             <View style={styles.statItem}>
               <Text style={styles.statNumber}>{totalWorkingDays}</Text>
               <Text style={[styles.statLabel, { color: colors.text }]}>
@@ -449,36 +465,127 @@ const Attendance = () => {
               </Text>
             </View>
             <View style={styles.verticalDivider} />
-
-            {/* Employee Working Days */}
             <View style={styles.statItem}>
               <Text style={[styles.statNumber, { color: "#00C851" }]}>
                 {employeeWorkingDays}
               </Text>
               <Text style={[styles.statLabel, { color: colors.text }]}>
-                Employee Working Days
+                Total Worked Days
               </Text>
             </View>
           </View>
         </View>
 
         <View style={styles.activities}>
-          {/* Header with Filter */}
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionDetails, { color: colors.text }]}>
-              Attendance History
+              Attendance Details
             </Text>
             <TouchableOpacity
               style={styles.filterButton}
-              onPress={() => setShowMonthPicker(true)}
+              onPress={toggleMonthPicker}
+              activeOpacity={0.7}
             >
               <FontAwesome name="calendar" size={16} color="#035F91" />
               <Text style={styles.filterButtonText}>
                 {monthNames[selectedMonth - 1]} {selectedYear}
               </Text>
-              <FontAwesome name="chevron-down" size={12} color="#035F91" />
+              <Animated.View style={{ transform: [{ rotate: chevronRotation }] }}>
+                <FontAwesome name="chevron-down" size={12} color="#035F91" />
+              </Animated.View>
             </TouchableOpacity>
           </View>
+
+          {/* Inline Month Picker */}
+          {showMonthPicker && (
+            <View style={[styles.monthPickerCard, { backgroundColor: colors.white }]}>
+              {/* Year Selection */}
+              <Text style={[styles.pickerSectionTitle, { color: colors.text }]}>Year</Text>
+              <View style={styles.pickerYearGrid}>
+                {generateYears().map((year) => {
+                  const isActive = year === pickerYear;
+                  return (
+                    <TouchableOpacity
+                      key={year}
+                      style={[
+                        styles.pickerYearItem,
+                        { backgroundColor: colors.background },
+                        isActive && styles.pickerYearItemActive,
+                      ]}
+                      onPress={() => setPickerYear(year)}
+                      activeOpacity={0.7}
+                    >
+                      <View
+                        style={[
+                          styles.pickerYearIcon,
+                          { backgroundColor: isActive ? "rgba(255,255,255,0.2)" : colors.primary + "15" },
+                        ]}
+                      >
+                        <Ionicons
+                          name="calendar-outline"
+                          size={16}
+                          color={isActive ? "#fff" : colors.primary}
+                        />
+                      </View>
+                      <Text
+                        style={[
+                          styles.pickerYearText,
+                          { color: colors.text },
+                          isActive && styles.pickerYearTextActive,
+                        ]}
+                      >
+                        {year}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Month Selection */}
+              <Text style={[styles.pickerSectionTitle, { color: colors.text, marginTop: verticalScale(16) }]}>Month</Text>
+              <View style={styles.pickerMonthGrid}>
+                {monthNames.map((monthName, index) => {
+                  const monthNumber = index + 1;
+                  const isFutureMonth =
+                    pickerYear > currentDate.getFullYear() ||
+                    (pickerYear === currentDate.getFullYear() &&
+                      monthNumber > currentDate.getMonth() + 1);
+                  const isSelected =
+                    selectedMonth === monthNumber && selectedYear === pickerYear;
+
+                  return (
+                    <TouchableOpacity
+                      key={`${pickerYear}-${monthNumber}`}
+                      style={[
+                        styles.pickerMonthButton,
+                        { backgroundColor: colors.background },
+                        isSelected && styles.pickerMonthSelected,
+                        isFutureMonth && styles.pickerMonthDisabled,
+                      ]}
+                      onPress={() => {
+                        if (!isFutureMonth) {
+                          handleMonthSelect(monthNumber);
+                        }
+                      }}
+                      disabled={isFutureMonth}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.pickerMonthText,
+                          { color: colors.text },
+                          isSelected && styles.pickerMonthTextSelected,
+                          isFutureMonth && styles.pickerMonthTextDisabled,
+                        ]}
+                      >
+                        {monthName.substring(0, 3)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
 
           {attendanceData.length === 0 ? (
             <View style={styles.noDataContainer}>
@@ -498,8 +605,8 @@ const Attendance = () => {
                 <RefreshControl
                   refreshing={refreshing}
                   onRefresh={handleRefresh}
-                  colors={["#035F91"]} // Android
-                  tintColor="#035F91" // iOS
+                  colors={["#035F91"]}
+                  tintColor="#035F91"
                 />
               }
             >
@@ -508,9 +615,11 @@ const Attendance = () => {
                   item.status,
                   item.isSunday
                 );
-
-                const isNonWorkingDay = item.isHoliday || item.isSunday;
-                const isLate = item.status?.toLowerCase() === "late";
+                const { name: iconName, color: iconColor, backgroundColor: iconBgColor } = getIconProps(
+                  item.status,
+                  item.isSunday,
+                  item.isHoliday
+                );
 
                 return (
                   <View
@@ -520,7 +629,6 @@ const Attendance = () => {
                       { borderLeftColor: badgeColor },
                     ]}
                   >
-                    {/* Header Ribbon */}
                     <View
                       style={[styles.ribbon, { backgroundColor: badgeColor }]}
                     >
@@ -532,66 +640,49 @@ const Attendance = () => {
                           : badgeText}
                       </Text>
                     </View>
-
-                    {/* Date Section */}
                     <View style={styles.dateSection}>
                       <View
                         style={[
                           styles.iconCircle,
-                          isNonWorkingDay && styles.nonWorkingDayIcon,
-                          isLate && styles.lateIcon,
+                          { backgroundColor: iconBgColor }
                         ]}
                       >
                         <FontAwesome
-                          name={
-                            item.isHoliday
-                              ? "gift"
-                              : item.isSunday
-                              ? "sun-o"
-                              : isLate
-                              ? "clock-o"
-                              : "calendar"
-                          }
+                          name={iconName}
                           size={16}
-                          color={
-                            isNonWorkingDay
-                              ? "#800094"
-                              : isLate
-                              ? "#FFBB33"
-                              : "#035F91"
-                            }
+                          color={iconColor}
                         />
                       </View>
                       <Text
-                        style={[
-                          styles.dateText,
-                          isNonWorkingDay ? styles.nonWorkingDayText : null,
-                          isLate ? styles.lateText : null,
-                        ]}
+                        style={[styles.dateText, { color: iconColor }]}
                       >
                         {item.date}
                       </Text>
                     </View>
-
-                    {/* Time Section */}
                     <View style={styles.timeSection}>
                       <View style={styles.timeRow}>
                         <FontAwesome name="clock-o" size={14} color="#999" />
-                        <Text style={styles.timeText}>
-                          In: {item.inTime || "--"}
-                        </Text>
+                        <TouchableOpacity
+                          onPress={() => handlePhotoClick(item.inPhotoUrl)}
+                        >
+                          <Text style={styles.timeText}>
+                            Punch In: {item.inTime || "--"}
+                          </Text>
+                        </TouchableOpacity>
                         <View style={styles.timeSeparator} />
                         <FontAwesome name="clock-o" size={14} color="#999" />
-                        <Text style={styles.timeText}>
-                          Out: {item.outTime || "--"}
-                        </Text>
+                        <TouchableOpacity
+                          onPress={() => handlePhotoClick(item.outPhotoUrl)}
+                        >
+                          <Text style={styles.timeText}>
+                            Last Punch: {item.outTime || "--"}
+                          </Text>
+                        </TouchableOpacity>
                       </View>
                     </View>
                   </View>
                 );
               })}
-
-              {/* Load More Button */}
               {hasMoreData && (
                 <TouchableOpacity
                   style={styles.loadMoreButton}
@@ -617,8 +708,6 @@ const Attendance = () => {
                   )}
                 </TouchableOpacity>
               )}
-
-              {/* End of list indicator */}
               {!hasMoreData && displayedItems.length > 0 && (
                 <View style={styles.endOfListContainer}>
                   <Text style={styles.endOfListText}>
@@ -630,9 +719,7 @@ const Attendance = () => {
           )}
         </View>
       </View>
-
-      {/* Month Picker Modal */}
-      <MonthPickerModal />
+      <PhotoModal />
     </View>
   );
 };
@@ -649,11 +736,11 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: moderateScale(20),
     padding: moderateScale(24),
-    elevation: 8,
+   elevation:2,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: verticalScale(4) },
-    shadowOpacity: 0.25,
-    shadowRadius: moderateScale(10),
+    shadowOffset: { width: 0, height: verticalScale(1) },
+    shadowOpacity: 0.1,
+    shadowRadius: moderateScale(4),
     borderWidth: 1,
     borderColor: "#E8ECEF",
     backgroundColor: "#FFFFFF",
@@ -674,51 +761,51 @@ const styles = StyleSheet.create({
     borderTopColor: "#E1F4FF",
     borderRightColor: "transparent",
   },
-triangle2: {
-  position: "absolute",
-  bottom: 10,
-  right: 10,
-  width: 0,
-  height: 0,
-  borderStyle: "solid",
-  borderTopWidth: moderateScale(60),
-  borderRightWidth: moderateScale(60),
-  borderBottomWidth: 0,
-  borderLeftWidth: 0,
-  borderTopColor: "#E1F4FF",
-  borderRightColor: "transparent",
-  transform: [{ rotate: "180deg" }], // 🔁 Add this line
-},
-triangle3: {
-  position: "absolute",
-  bottom: 10,
-  left: 10,
-  width: 0,
-  height: 0,
-  borderStyle: "solid",
-  borderTopWidth: moderateScale(60),
-  borderRightWidth: moderateScale(60),
-  borderBottomWidth: 0,
-  borderLeftWidth: 0,
-  borderTopColor: "#E1F4FF",
-  borderRightColor: "transparent",
-  transform: [{ rotate: "270deg" }], // 🔁 Add this line
-},
-triangle4: {
-  position: "absolute",
-  top: 10,
-  right: 10,
-  width: 0,
-  height: 0,
-  borderStyle: "solid",
-  borderTopWidth: moderateScale(60),
-  borderRightWidth: moderateScale(60),
-  borderBottomWidth: 0,
-  borderLeftWidth: 0,
-  borderTopColor: "#E1F4FF",
-  borderRightColor: "transparent",
-  transform: [{ rotate: "90deg" }], // 🔁 Add this line
-},
+  triangle2: {
+    position: "absolute",
+    bottom: 10,
+    right: 10,
+    width: 0,
+    height: 0,
+    borderStyle: "solid",
+    borderTopWidth: moderateScale(60),
+    borderRightWidth: moderateScale(60),
+    borderBottomWidth: 0,
+    borderLeftWidth: 0,
+    borderTopColor: "#E1F4FF",
+    borderRightColor: "transparent",
+    transform: [{ rotate: "180deg" }],
+  },
+  triangle3: {
+    position: "absolute",
+    bottom: 10,
+    left: 10,
+    width: 0,
+    height: 0,
+    borderStyle: "solid",
+    borderTopWidth: moderateScale(60),
+    borderRightWidth: moderateScale(60),
+    borderBottomWidth: 0,
+    borderLeftWidth: 0,
+    borderTopColor: "#E1F4FF",
+    borderRightColor: "transparent",
+    transform: [{ rotate: "270deg" }],
+  },
+  triangle4: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 0,
+    height: 0,
+    borderStyle: "solid",
+    borderTopWidth: moderateScale(60),
+    borderRightWidth: moderateScale(60),
+    borderBottomWidth: 0,
+    borderLeftWidth: 0,
+    borderTopColor: "#E1F4FF",
+    borderRightColor: "transparent",
+    transform: [{ rotate: "90deg" }],
+  },
   overviewHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -738,6 +825,7 @@ triangle4: {
     justifyContent: "space-around",
     alignItems: "center",
     paddingVertical: verticalScale(10),
+    marginTop:8
   },
   statItem: {
     alignItems: "center",
@@ -802,7 +890,7 @@ triangle4: {
     borderRadius: moderateScale(7),
     padding: moderateScale(12),
     marginTop: verticalScale(12),
-    elevation:2,
+    elevation: 2,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: verticalScale(2) },
     shadowOpacity: 0.1,
@@ -839,28 +927,13 @@ triangle4: {
     marginBottom: verticalScale(8),
   },
   iconCircle: {
-    backgroundColor: "#E1F4FF",
     padding: moderateScale(8),
     borderRadius: 50,
     marginRight: horizontalScale(10),
   },
-  lateIcon: {
-    backgroundColor: "#FFF4E0",
-  },
-  nonWorkingDayIcon: {
-    backgroundColor: "#F3E5F5",
-  },
   dateText: {
     fontSize: moderateScale(14),
     fontWeight: "600",
-    color: "#333",
-  },
-  lateText: {
-    color: "#B8860B",
-    fontWeight: "600",
-  },
-  nonWorkingDayText: {
-    color: "#666",
   },
   timeSection: {
     borderTopWidth: 1,
@@ -871,7 +944,7 @@ triangle4: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-start",
-    gap: 7,
+    gap: 1,
   },
   timeText: {
     marginLeft: horizontalScale(6),
@@ -892,7 +965,7 @@ triangle4: {
     borderRadius: moderateScale(8),
     alignItems: "center",
     justifyContent: "center",
-    marginBottom:60
+    marginBottom: 60,
   },
   loadMoreContainer: {
     flexDirection: "row",
@@ -945,33 +1018,56 @@ triangle4: {
     fontWeight: "500",
     marginHorizontal: horizontalScale(6),
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContainer: {
-    width: "85%",
-    maxHeight: "70%",
+  monthPickerModalContainer: {
+    width: screenWidth * 0.9,
+    maxHeight: screenHeight * 0.7,
     borderRadius: moderateScale(16),
+    padding: moderateScale(16),
     elevation: 5,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: verticalScale(2) },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
-    shadowRadius: moderateScale(4),
+    shadowRadius: 4,
   },
-  modalHeader: {
+  monthPickerModalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: moderateScale(20),
+    paddingBottom: verticalScale(12),
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    borderBottomColor: "#E8ECEF",
   },
-  modalTitle: {
-    fontSize: moderateScale(18),
-    fontWeight: "600",
+  monthPickerModalTitle: {
+    fontSize: moderateScale(20),
+    fontWeight: "700",
+    flex: 1,
+    textAlign: "center",
+  },
+  monthPickerCloseButton: {
+    padding: moderateScale(8),
+    borderRadius: moderateScale(20),
+  },
+  monthPickerModalContent: {
+    paddingVertical: verticalScale(16),
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: verticalScale(40),
+    right: horizontalScale(20),
+    zIndex: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: moderateScale(20),
+    padding: moderateScale(8),
+  },
+  modalImage: {
+    width: screenWidth * 0.9,
+    height: screenHeight * 0.7,
   },
   yearSection: {
     marginBottom: verticalScale(20),
@@ -979,44 +1075,125 @@ triangle4: {
   yearTitle: {
     fontSize: moderateScale(16),
     fontWeight: "600",
-    marginBottom: verticalScale(10),
+    marginBottom: verticalScale(12),
+    marginLeft: horizontalScale(8),
   },
   monthGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
+    paddingHorizontal: horizontalScale(8),
   },
   monthButton: {
     width: "30%",
-    padding: moderateScale(10),
-    marginBottom: verticalScale(10),
+    padding: moderateScale(12),
+    marginBottom: verticalScale(12),
     borderRadius: moderateScale(8),
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F5F5",
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E8ECEF",
   },
   selectedMonthButton: {
     backgroundColor: "#035F91",
+    borderColor: "#026D94",
   },
   disabledMonthButton: {
-    backgroundColor: "#e0e0e0",
+    backgroundColor: "#E0E0E0",
+    borderColor: "#D3D3D3",
     opacity: 0.6,
   },
   monthButtonText: {
     fontSize: moderateScale(14),
     color: "#333",
+    fontWeight: "500",
   },
   selectedMonthButtonText: {
-    color: "#fff",
+    color: "#FFFFFF",
     fontWeight: "600",
   },
   disabledMonthButtonText: {
     color: "#999",
   },
-  modalContent: {
-    padding: 20,
+
+  // Inline Month Picker styles
+  monthPickerCard: {
+    borderRadius: moderateScale(16),
+    padding: moderateScale(16),
+    marginBottom: verticalScale(12),
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: "#E8ECEF",
   },
-  closeButton: {
-    color: "red",
+  pickerSectionTitle: {
+    fontSize: moderateScale(15),
+    fontWeight: "bold",
+    marginBottom: verticalScale(10),
+  },
+  pickerYearGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: horizontalScale(8),
+  },
+  pickerYearItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: horizontalScale(12),
+    paddingVertical: verticalScale(10),
+    borderRadius: moderateScale(12),
+    flex: 1,
+    minWidth: (screenWidth - horizontalScale(100)) / 2,
+  },
+  pickerYearItemActive: {
+    backgroundColor: "#026D94",
+  },
+  pickerYearIcon: {
+    width: horizontalScale(30),
+    height: horizontalScale(30),
+    borderRadius: horizontalScale(15),
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: horizontalScale(8),
+  },
+  pickerYearText: {
+    fontSize: moderateScale(14),
+    fontWeight: "600",
+  },
+  pickerYearTextActive: {
+    color: "#fff",
+  },
+  pickerMonthGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: horizontalScale(8),
+  },
+  pickerMonthButton: {
+    width: (screenWidth - horizontalScale(112)) / 4,
+    paddingVertical: verticalScale(12),
+    borderRadius: moderateScale(10),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pickerMonthText: {
+    fontSize: moderateScale(13),
+    fontWeight: "600",
+  },
+  pickerMonthSelected: {
+    backgroundColor: "#026D94",
+  },
+  pickerMonthTextSelected: {
+    color: "#fff",
+    fontWeight: "700",
+  },
+  pickerMonthDisabled: {
+    backgroundColor: "#F2F2F2",
+  },
+  pickerMonthTextDisabled: {
+    color: "#999",
   },
 });
 

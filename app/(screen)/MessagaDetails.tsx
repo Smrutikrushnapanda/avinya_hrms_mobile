@@ -1,7 +1,14 @@
+import { Ionicons } from "@expo/vector-icons";
 import Header from "app/components/Header";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React from "react";
-import { StyleSheet, Text, View, useColorScheme } from "react-native";
+import {
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useColorScheme,
+} from "react-native";
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import { darkTheme, lightTheme } from "../constants/colors";
 
@@ -17,6 +24,10 @@ const MessagaDetails = () => {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Header title="Message Detail" />
       <View style={styles.cardWrapper}>
+        <TouchableOpacity style={styles.backRow} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={18} color="#005F90" />
+          <Text style={styles.backText}>Back</Text>
+        </TouchableOpacity>
         <View style={[styles.card, { backgroundColor: colors.white }]}>
           <View style={styles.statsContainer}>
             <View style={styles.headerRow}>
@@ -51,6 +62,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: horizontalScale(20),
     zIndex: 10,
     flex: 1,
+  },
+  backRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: horizontalScale(6),
+    paddingVertical: verticalScale(6),
+    paddingHorizontal: horizontalScale(4),
+  },
+  backText: {
+    fontSize: moderateScale(12),
+    color: "#005F90",
+    fontWeight: "600",
   },
   card: {
     borderRadius: moderateScale(16),

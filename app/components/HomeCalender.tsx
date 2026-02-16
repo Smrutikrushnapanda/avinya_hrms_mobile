@@ -1,6 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import {
+  Dimensions,
+  Image,
   Modal,
   StyleSheet,
   Text,
@@ -13,6 +15,13 @@ import { monthlyAttendance } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
 import { darkTheme, lightTheme } from "../constants/colors";
 
+// Get screen dimensions for responsive sizing
+const { width: screenWidth } = Dimensions.get('window');
+const daySize = Math.min((screenWidth - 60) / 7, 45); // Responsive day size
+const circleSize = Math.min(daySize * 0.9, 32); // Smaller circle size (70% of daySize)
+const todayCircleSize = circleSize * 1.1; // 10% larger for today
+const textSize = Math.min(daySize * 0.45, 14); // Larger text size relative to circle
+
 // Define types for attendance data
 type AttendanceStatus = "present" | "absent" | "half-day" | "pending";
 
@@ -23,6 +32,10 @@ interface AttendanceRecord {
   isHoliday: boolean;
   holidayName?: string;
   isOptional?: boolean;
+  inTime?: string; // e.g., "09:00 AM"
+  outTime?: string; // e.g., "05:00 PM"
+  inPhotoUrl?: string; // URL for check-in photo
+  outPhotoUrl?: string; // URL for check-out photo
 }
 
 interface AttendanceData {
@@ -51,9 +64,10 @@ const HomeCalendar = () => {
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [showInfo, setShowInfo] = useState<boolean>(false);
-  const [showHolidayModal, setShowHolidayModal] = useState<boolean>(false);
-  const [selectedHoliday, setSelectedHoliday] =
-    useState<AttendanceRecord | null>(null);
+  const [showDateModal, setShowDateModal] = useState<boolean>(false);
+  const [showPhotoModal, setShowPhotoModal] = useState<boolean>(false);
+  const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null);
+  const [selectedDayData, setSelectedDayData] = useState<AttendanceRecord | null>(null);
   const [attendanceData, setAttendanceData] = useState<AttendanceData>({});
   const [currentMonth, setCurrentMonth] = useState<number>(
     new Date().getMonth() + 1
@@ -65,7 +79,7 @@ const HomeCalendar = () => {
   // Function to fetch monthly attendance data
   const fetchMonthlyAttendance = async (month: number, year: number) => {
     if (!user?.userId || !user?.organizationId) {
-      console.error("User ID or Organization ID not found");
+      console.log("User ID or Organization ID not found");
       return;
     }
 
@@ -102,13 +116,8 @@ const HomeCalendar = () => {
   const onDayPress = (day: DateData) => {
     setSelectedDate(day.dateString);
     const dayData = attendanceData[day.dateString];
-
-    // If it's a holiday, show holiday modal
-    if (dayData?.isHoliday && dayData?.holidayName) {
-      setSelectedHoliday(dayData);
-      setShowHolidayModal(true);
-    }
-
+    setSelectedDayData(dayData || { date: day.dateString, status: "pending" });
+    setShowDateModal(true);
     console.log("Selected date:", day.dateString);
   };
 
@@ -119,6 +128,32 @@ const HomeCalendar = () => {
     if (newMonth !== currentMonth || newYear !== currentYear) {
       setCurrentMonth(newMonth);
       setCurrentYear(newYear);
+    }
+  };
+
+  // Function to format date for display
+  const formatDateForDisplay = (dateString: string): string => {
+    if (!dateString) return "";
+    
+    try {
+      const date = new Date(dateString);
+      const day = date.getDate();
+      const month = date.toLocaleString('default', { month: 'long' });
+      const year = date.getFullYear();
+      
+      // Add ordinal suffix to day
+      const getOrdinalSuffix = (num: number): string => {
+        const j = num % 10;
+        const k = num % 100;
+        if (j === 1 && k !== 11) return "st";
+        if (j === 2 && k !== 12) return "nd";
+        if (j === 3 && k !== 13) return "rd";
+        return "th";
+      };
+      
+      return `${day}${getOrdinalSuffix(day)} of ${month} ${year}`;
+    } catch (error) {
+      return dateString; // Fallback to original string if parsing fails
     }
   };
 
@@ -140,7 +175,7 @@ const HomeCalendar = () => {
             backgroundColor = "#00C851"; // Green
             break;
           case "absent":
-            backgroundColor = "#cb0101ff"; // Red
+            backgroundColor = "#ba0010ff"; // Improved red color - softer and more professional
             break;
           case "half-day":
             backgroundColor = "#e67b00ff"; // Orange
@@ -173,6 +208,91 @@ const HomeCalendar = () => {
     }
 
     return marked;
+  };
+
+  // Helper function to get border color for attendance status
+  const getAttendanceBorderColor = (dayData: AttendanceRecord | undefined): string | null => {
+    if (!dayData) return null;
+    
+    // Priority: Sunday > Holiday > Status
+    if (dayData.isSunday) {
+      return "#026D94"; // Blue for Sunday
+    } else if (dayData.isHoliday) {
+      return "#045faaff"; // Black border for holidays
+    } else {
+      switch (dayData.status) {
+        case "present":
+          return "#00C851"; // Green
+        case "absent":
+          return "#ba0010ff"; // Improved red color - softer and professional
+        case "half-day":
+          return "#e67b00ff"; // Orange
+        case "pending":
+          return null; // No special border for pending
+        default:
+          return null;
+      }
+    }
+  };
+
+  // Helper function to get light background color for attendance status
+  const getAttendanceLightBackgroundColor = (dayData: AttendanceRecord | undefined): string | null => {
+    if (!dayData) return null;
+    
+    if (dayData.isSunday) {
+      return "#026D94"; 
+    } else if (dayData.isHoliday) {
+      return "transparent"; 
+    } else {
+      switch (dayData.status) {
+        case "present":
+          return "rgba(0, 200, 80, 0.09)"; 
+        case "absent":
+          return "rgba(186, 0, 16, 0.09)";
+        case "half-day":
+          return "rgba(230, 123, 0, 0.09)"; 
+        case "pending":
+          return null;
+        default:
+          return null;
+      }
+    }
+  };
+
+  // Function to calculate duration between inTime and outTime
+  const calculateDuration = (inTime?: string, outTime?: string): string => {
+    if (!inTime || !outTime) return "N/A";
+
+    try {
+      // Parse times (assuming "HH:MM AM/PM" format)
+      const parseTime = (timeStr: string) => {
+        const [time, period] = timeStr.split(" ");
+        let [hours, minutes] = time.split(":").map(Number);
+        if (period === "PM" && hours !== 12) hours += 12;
+        if (period === "AM" && hours === 12) hours = 0;
+        return new Date(0, 0, 0, hours, minutes).getTime();
+      };
+
+      const inTimestamp = parseTime(inTime);
+      const outTimestamp = parseTime(outTime);
+      const durationMs = outTimestamp - inTimestamp;
+
+      if (durationMs < 0) return "Invalid times";
+
+      const hours = Math.floor(durationMs / (1000 * 60 * 60));
+      const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+      return `${hours}h ${minutes}m`;
+    } catch (error) {
+      return "N/A";
+    }
+  };
+
+  // Function to open photo modal
+  const openPhoto = (url?: string) => {
+    if (url) {
+      setSelectedPhotoUrl(url);
+      setShowPhotoModal(true);
+    }
   };
 
   return (
@@ -217,6 +337,10 @@ const HomeCalendar = () => {
             const isToday =
               date?.dateString === new Date().toISOString().split("T")[0];
 
+            // Get border color and light background color
+            const borderColor = getAttendanceBorderColor(dayData);
+            const lightBackgroundColor = getAttendanceLightBackgroundColor(dayData);
+
             // Determine holiday indicator text
             let holidayIndicator = null;
             if (dayData?.isHoliday) {
@@ -230,73 +354,98 @@ const HomeCalendar = () => {
             return (
               <TouchableOpacity
                 onPress={() => onDayPress(date as DateData)}
-                style={[
-                  styles.dayContainer,
-                  // Holiday design - blue background with primary color border
-                  dayData?.isHoliday && {
-                    backgroundColor: "transparent", // No fill
-                    borderWidth: 2,
-                    borderColor: "#045faaff", // Black border
-                    borderRadius: 16,
-                  },
-
-                  // Today design - light blur color with border
-                  isToday &&
-                    !dayData?.isHoliday && {
+                style={styles.dayContainer}
+              >
+                <View
+                  style={[
+                    styles.circleContainer,
+                    // Apply larger size for today
+                    isToday && {
+                      width: todayCircleSize,
+                      height: todayCircleSize,
+                    },
+                    // Sunday design - solid blue background
+                    dayData?.isSunday && {
+                      backgroundColor: "#026D94",
+                      borderRadius: isToday ? todayCircleSize / 2 : circleSize / 2,
+                    },
+                    // Holiday design - light background with border
+                    dayData?.isHoliday && !dayData?.isSunday && {
+                      backgroundColor: "transparent",
+                      borderWidth: 2,
+                      borderColor: borderColor || "transparent",
+                      borderRadius: isToday ? todayCircleSize / 2 : circleSize / 2,
+                    },
+                    // Attendance status design - light background with border
+                    borderColor && !dayData?.isSunday && !dayData?.isHoliday && {
+                      backgroundColor: lightBackgroundColor || "transparent",
+                      borderWidth: 2,
+                      borderColor: borderColor,
+                      borderRadius: isToday ? todayCircleSize / 2 : circleSize / 2,
+                    },
+                    // Today design - only apply if there's no attendance data
+                    isToday && !dayData && {
                       borderWidth: 2,
                       borderColor: "#919191ff",
-                      borderRadius: 16,
-                      backgroundColor: "#919191ff", // 20% opacity for light blur
+                      borderRadius: todayCircleSize / 2,
+                      backgroundColor: "rgba(145, 145, 145, 0.2)",
                     },
-                  // Other status markings (present, absent, etc.)
-                  marking?.selected &&
-                    !dayData?.isHoliday &&
-                    !isToday && {
-                      backgroundColor: marking.selectedColor,
-                      borderRadius: 16,
-                    },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.dayText,
-                    {
-                      color: dayData?.isHoliday
-                        ? "#ffffff" // White text for holidays with blue background
-                        : marking?.selected && !isToday
-                        ? marking.selectedTextColor
-                        : state === "disabled"
-                        ? colors.grey
-                        : colors.text,
-                    },
-                    // Today text styling (only if not a holiday)
-                    isToday &&
-                      !dayData?.isHoliday && {
-                        color: "#fff",
-                        fontWeight: "bold",
-                      },
-                    // Holiday text styling
-                    dayData?.isHoliday && {
-                      color: "#006dacff", // White text for better contrast on blue background
-                      fontWeight: "bold",
+                    // Today design with attendance data - add a subtle border to indicate today
+                    isToday && dayData && {
+                      borderWidth: dayData.isSunday ? 0 : 2,
+                      borderColor: dayData.isSunday ? "transparent" : "#ffffff",
+                      borderRadius: todayCircleSize / 2,
                     },
                   ]}
                 >
-                  {date?.day}
-                </Text>
-                {holidayIndicator && (
                   <Text
                     style={[
-                      styles.holidayIndicator,
+                      styles.dayText,
                       {
-                        color: "#ffffff", // White text for holiday indicator
-                        backgroundColor: "rgba(0, 0, 0, 0.91)", // Light white background for better visibility
+                        color: dayData?.isSunday
+                          ? "#ffffff" // White text for Sunday
+                          : borderColor && !dayData?.isSunday
+                          ? borderColor // Use border color for text
+                          : isToday && !dayData
+                          ? "#919191ff" // Grey text for today without attendance data
+                          : state === "disabled"
+                          ? colors.grey
+                          : colors.text,
+                      },
+                      // Today text styling
+                      isToday && {
+                        fontWeight: "bold",
+                      },
+                      // Holiday text styling
+                      dayData?.isHoliday && {
+                        fontWeight: "bold",
                       },
                     ]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.7}
                   >
-                    {holidayIndicator}
+                    {date?.day}
                   </Text>
-                )}
+                  {holidayIndicator && (
+                    <View style={styles.holidayIndicatorContainer}>
+                      <Text
+                        style={[
+                          styles.holidayIndicator,
+                          {
+                            color: "#ffffff",
+                            backgroundColor: "rgba(0, 0, 0, 0.91)",
+                          },
+                        ]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit={true}
+                        minimumFontScale={0.5}
+                      >
+                        {holidayIndicator}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </TouchableOpacity>
             );
           }}
@@ -306,110 +455,194 @@ const HomeCalendar = () => {
       {/* Info Modal */}
       <Modal visible={showInfo} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { backgroundColor: colors.white }]}>
-            <View style={styles.modalHeader}>
-  <Text style={[styles.modalTitle, { color: colors.text }]}>Legend</Text>
-  <TouchableOpacity onPress={() => setShowInfo(false)} style={styles.close}>
-    <Ionicons name="close" size={24} color={colors.white} />
-  </TouchableOpacity>
-</View>
-
-
-            <View style={styles.legendItem}>
-              <View
-                style={[styles.legendDot, { backgroundColor: "#00C851" }]}
-              />
-              <Text style={[styles.legendText, { color: colors.text }]}>
-                Present
-              </Text>
+          <View style={[styles.infoModalBox, { backgroundColor: colors.white }]}>
+            <View style={styles.infoModalHeader}>
+              <Text style={[styles.infoModalTitle, { color: colors.text }]}>Legend</Text>
+              <TouchableOpacity onPress={() => setShowInfo(false)} style={styles.infoCloseButton}>
+                <Ionicons name="close" size={24} color={colors.white} />
+              </TouchableOpacity>
             </View>
 
-            <View style={styles.legendItem}>
-              <View
-                style={[styles.legendDot, { backgroundColor: "#ff4444" }]}
-              />
-              <Text style={[styles.legendText, { color: colors.text }]}>
-                Absent
-              </Text>
-            </View>
+            <View style={styles.infoModalContent}>
+              <View style={styles.legendItem}>
+                <View
+                  style={[styles.legendDot, { backgroundColor: "#00C851" }]}
+                />
+                <Text style={[styles.legendText, { color: colors.text }]}>
+                  Present
+                </Text>
+              </View>
 
-            <View style={styles.legendItem}>
-              <View
-                style={[styles.legendDot, { backgroundColor: "#FF8800" }]}
-              />
-              <Text style={[styles.legendText, { color: colors.text }]}>
-                Half Day
-              </Text>
-            </View>
+              <View style={styles.legendItem}>
+                <View
+                  style={[styles.legendDot, { backgroundColor: "#ba0010ff" }]}
+                />
+                <Text style={[styles.legendText, { color: colors.text }]}>
+                  Absent
+                </Text>
+              </View>
 
-            <View style={styles.legendItem}>
-              <View
-                style={[styles.legendDot, { backgroundColor: "#026D94" }]}
-              />
-              <Text style={[styles.legendText, { color: colors.text }]}>
-                Sunday
-              </Text>
-            </View>
+              <View style={styles.legendItem}>
+                <View
+                  style={[styles.legendDot, { backgroundColor: "#FF8800" }]}
+                />
+                <Text style={[styles.legendText, { color: colors.text }]}>
+                  Half Day
+                </Text>
+              </View>
 
-            <View style={styles.legendItem}>
-              <View
-                style={[styles.legendDot, { backgroundColor: "#2196F3" }]}
-              />
-              <Text style={[styles.legendText, { color: colors.text }]}>
-                Holiday
-              </Text>
-            </View>
+              <View style={styles.legendItem}>
+                <View
+                  style={[styles.legendDot, { backgroundColor: "#026D94" }]}
+                />
+                <Text style={[styles.legendText, { color: colors.text }]}>
+                  Sunday
+                </Text>
+              </View>
 
-            <View style={styles.legendItem}>
-              <Text
-                style={[
-                  styles.legendText,
-                  { color: colors.text, fontWeight: "bold" },
-                ]}
-              >
-                "RH" = Restricted Holiday, "H" = Holiday
-              </Text>
-            </View>
+              <View style={styles.legendItem}>
+                <View
+                  style={[styles.legendDot, { backgroundColor: "#2196F3" }]}
+                />
+                <Text style={[styles.legendText, { color: colors.text }]}>
+                  Holiday
+                </Text>
+              </View>
 
-            {/* <TouchableOpacity
-              onPress={() => setShowInfo(false)}
-              style={[styles.modalButton, { backgroundColor: colors.primary }]}
-            >
-              <Text style={styles.modalButtonText}>Close</Text>
-            </TouchableOpacity> */}
+              <View style={styles.legendItem}>
+                <Text
+                  style={[
+                    styles.legendText,
+                    { color: colors.text, fontWeight: "bold" },
+                  ]}
+                >
+                  "RH" = Restricted Holiday, "H" = Holiday
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
       </Modal>
 
-      {/* Holiday Modal */}
-      <Modal visible={showHolidayModal} transparent animationType="fade">
+      {/* Date Info Modal */}
+      <Modal visible={showDateModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { backgroundColor: colors.white }]}>
-            <View style={styles.modalHeader}>
-  <Text style={[styles.modalTitle, { color: colors.text }]}>Holiday Information</Text>
-  <TouchableOpacity onPress={() => setShowHolidayModal(false)} style={styles.close}>
-    <Ionicons name="close" size={24} color={colors.white} />
-  </TouchableOpacity>
-</View>
-
-
-            <View style={styles.holidayInfo}>
-              <Text style={[styles.holidayDate, { color: colors.text }]}>
-                {selectedHoliday?.date}
+          <View style={[styles.dateModalBox, { backgroundColor: colors.white }]}>
+            <View style={[styles.dateModalHeader, { backgroundColor: colors.primary }]}>
+              <Text style={[styles.dateModalTitle, { color: "#ffffff" }]}>
+                {formatDateForDisplay(selectedDayData?.date || "")}
               </Text>
-              <Text style={[styles.holidayName, { color: colors.primary }]}>
-                {selectedHoliday?.holidayName}
-              </Text>
-              {selectedHoliday?.isOptional ? (
-                <Text style={[styles.holidayType, { color: colors.text }]}>
-                  (Restricted Holiday )
-                </Text>
+              <TouchableOpacity onPress={() => setShowDateModal(false)} style={styles.dateCloseButton}>
+                <Ionicons name="close" size={24} color="#ffffff" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.dateModalContent}>
+              {selectedDayData?.isHoliday ? (
+                <>
+                  <Text style={[styles.holidayName, { color: colors.primary }]}>
+                    {selectedDayData?.holidayName}
+                  </Text>
+                  <Text style={[styles.holidayType, { color: colors.text }]}>
+                    {selectedDayData?.isOptional ? "(Restricted Holiday)" : "(Holiday)"}
+                  </Text>
+                </>
+              ) : (selectedDayData?.status === "present" || selectedDayData?.status === "half-day") ? (
+                <View style={styles.attendanceInfo}>
+                  <View style={styles.attendanceCard}>
+                    <View style={styles.attendanceRow}>
+                      <View style={styles.attendanceIconContainer}>
+                        <Ionicons name="log-in-outline" size={24} color="#00C851" />
+                      </View>
+                      <View style={styles.attendanceTextContainer}>
+                        <Text style={[styles.attendanceLabel, { color: colors.text }]}>Punch In</Text>
+                        <Text style={[styles.attendanceTime, { color: colors.text }]}>
+                          {selectedDayData?.inTime || "N/A"}
+                        </Text>
+                      </View>
+                    </View>
+                    
+                    <View style={styles.attendanceRow}>
+                      <View style={styles.attendanceIconContainer}>
+                        <Ionicons name="log-out-outline" size={24} color="#ff4444" />
+                      </View>
+                      <View style={styles.attendanceTextContainer}>
+                        <Text style={[styles.attendanceLabel, { color: colors.text }]}>Punch Out</Text>
+                        <Text style={[styles.attendanceTime, { color: colors.text }]}>
+                          {selectedDayData?.outTime || "N/A"}
+                        </Text>
+                      </View>
+                    </View>
+                    
+                    <View style={styles.attendanceRow}>
+                      <View style={styles.attendanceIconContainer}>
+                        <Ionicons name="time-outline" size={24} color={colors.primary} />
+                      </View>
+                      <View style={styles.attendanceTextContainer}>
+                        <Text style={[styles.attendanceLabel, { color: colors.text }]}>Duration</Text>
+                        <Text style={[styles.attendanceTime, { color: colors.text }]}>
+                          {calculateDuration(selectedDayData?.inTime, selectedDayData?.outTime)}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
               ) : (
-                <Text style={[styles.holidayType, { color: colors.text }]}>
-                  (Holiday)
+                <Text style={[styles.statusText, { color: colors.text }]}>
+                  Status: {selectedDayData?.status.charAt(0).toUpperCase() + selectedDayData?.status.slice(1) || "No data"}
                 </Text>
               )}
             </View>
+
+            {/* Footer with photo links */}
+            {(selectedDayData?.status === "present" || selectedDayData?.status === "half-day") && (
+              <View style={styles.photoFooter}>
+                <TouchableOpacity 
+                  onPress={() => openPhoto(selectedDayData?.inPhotoUrl)} 
+                  style={[
+                    styles.photoButton,
+                    { backgroundColor: selectedDayData?.inPhotoUrl ? colors.primary : colors.grey }
+                  ]}
+                  disabled={!selectedDayData?.inPhotoUrl}
+                >
+                  <Text style={styles.photoButtonText}>IN Photo</Text>
+                </TouchableOpacity>
+                
+                <View style={styles.photoSeparator} />
+                
+                <TouchableOpacity 
+                  onPress={() => openPhoto(selectedDayData?.outPhotoUrl)} 
+                  style={[
+                    styles.photoButton,
+                    { backgroundColor: selectedDayData?.outPhotoUrl ? colors.primary : colors.grey }
+                  ]}
+                  disabled={!selectedDayData?.outPhotoUrl}
+                >
+                  <Text style={styles.photoButtonText}>OUT Photo</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Photo Viewer Modal */}
+      <Modal visible={showPhotoModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.photoModalBox, { backgroundColor: colors.white }]}>
+            <TouchableOpacity 
+              onPress={() => setShowPhotoModal(false)} 
+              style={[styles.photoCloseButton, { backgroundColor: colors.primary }]}
+            >
+              <Ionicons name="close" size={24} color="#ffffff" />
+            </TouchableOpacity>
+            {selectedPhotoUrl && (
+              <Image
+                source={{ uri: selectedPhotoUrl }}
+                style={styles.fullPhoto}
+                resizeMode="contain"
+              />
+            )}
           </View>
         </View>
       </Modal>
@@ -445,30 +678,43 @@ const styles = StyleSheet.create({
     marginBottom: 35,
   },
   dayContainer: {
-    width: 32,
-    height: 32,
+    width: daySize,
+    height: daySize,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+    margin: 1,
+  },
+  circleContainer: {
+    width: circleSize,
+    height: circleSize,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
   },
   dayText: {
-    fontSize: 16,
+    fontSize: textSize,
     textAlign: "center",
+    fontWeight: "500",
+    maxWidth: circleSize - 4,
+  },
+  holidayIndicatorContainer: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    zIndex: 1,
   },
   holidayIndicator: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    fontSize: 8,
+    fontSize: Math.min(circleSize * 0.25, 8),
     fontWeight: "bold",
-    color: "#9C27B0",
     backgroundColor: "rgba(22, 22, 22, 0.97)",
-    borderRadius: 6,
+    borderRadius: Math.min(circleSize * 0.3, 8),
     paddingHorizontal: 2,
     paddingVertical: 1,
-    minWidth: 16,
+    minWidth: Math.min(circleSize * 0.5, 14),
     textAlign: "center",
-    lineHeight: 10,
+    lineHeight: Math.min(circleSize * 0.3, 10),
+    overflow: "hidden",
   },
   modalOverlay: {
     flex: 1,
@@ -476,20 +722,35 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  modalBox: {
-    width: 300,
+
+  // Info Modal Styles
+  infoModalBox: {
+    width: Math.min(screenWidth * 0.8, 300),
     borderRadius: 12,
-    padding: 24,
     elevation: 5,
     shadowColor: "#000",
     shadowOpacity: 0.2,
     shadowRadius: 10,
   },
-  modalTitle: {
+  infoModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  infoModalTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 20,
+  },
+  infoCloseButton: {
+    backgroundColor: "red",
+    borderRadius: 15,
+    padding: 2,
+  },
+  infoModalContent: {
+    padding: 20,
   },
   legendItem: {
     flexDirection: "row",
@@ -504,46 +765,138 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: 16,
+    flex: 1,
   },
-  modalButton: {
-    marginTop: 20,
-    paddingVertical: 10,
-    borderRadius: 6,
+
+  // Date Modal Styles
+  dateModalBox: {
+    width: Math.min(screenWidth * 0.85, 350),
+    borderRadius: 12,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    overflow: "hidden",
+  },
+  dateModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
+    padding: 16,
   },
-  modalButtonText: {
-    color: "#fff",
+  dateModalTitle: {
+    fontSize: 18,
     fontWeight: "bold",
-    fontSize: 16,
   },
-  holidayInfo: {
-    alignItems: "center",
-    marginBottom: 20,
+  dateCloseButton: {
+    borderRadius: 15,
+    padding: 2,
   },
-  holidayDate: {
-    fontSize: 16,
-    marginBottom: 8,
+  dateModalContent: {
+    padding: 20,
   },
   holidayName: {
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 4,
+    textAlign: "center",
   },
   holidayType: {
     fontSize: 14,
     fontStyle: "italic",
+    textAlign: "center",
   },
-  modalHeader: {
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: 10,
-},
-close:{
-  position:"relative",
-  bottom:20,
-  left:10,
-  backgroundColor:"red",
-  borderRadius:15
-}
-});
+  statusText: {
+    fontSize: 16,
+    textAlign: "center",
+  },
+  attendanceInfo: {
+    width: "100%",
+  },
+  attendanceCard: {
+    backgroundColor: "#f8f9fa",
+    borderRadius: 12,
+    padding: 16,
+  },
+  attendanceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  attendanceIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "#ffffff",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  attendanceTextContainer: {
+    flex: 1,
+  },
+  attendanceLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 4,
+    opacity: 0.7,
+  },
+  attendanceTime: {
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+
+  // Photo Footer Styles
+  photoFooter: {
+    flexDirection: "row",
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#eee",
+    paddingTop: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  photoButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photoButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  photoSeparator: {
+    width: 2,
+    backgroundColor: "#ffffff",
+    marginHorizontal: 8,
+  },
+
+  // Photo Modal Styles
+  photoModalBox: {
+    width: Math.min(screenWidth * 0.9, 400),
+    height: Math.min(screenWidth * 0.9, 400),
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photoCloseButton: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    zIndex: 1,
+    borderRadius: 15,
+    padding: 2,
+  },
+  fullPhoto: {
+    width: "100%",
+    height: "100%",
+  },
+}); 

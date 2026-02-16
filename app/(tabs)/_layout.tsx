@@ -1,8 +1,7 @@
 import { FontAwesome5 } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  Alert,
   Animated,
   Dimensions,
   Modal,
@@ -16,14 +15,19 @@ import {
   View,
 } from "react-native";
 import { NetworkInfo } from "react-native-network-info";
-
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
+import CustomDialog from "../components/CustomDialog";
 
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const TabLayout = () => {
+  const router = useRouter();
   const [isBottomSheetVisible, setIsBottomSheetVisible] = useState(false);
   const [translateY] = useState(new Animated.Value(SCREEN_HEIGHT));
+  const [dialogVisible, setDialogVisible] = useState(false);
+  const [dialogTitle, setDialogTitle] = useState("");
+  const [dialogMessage, setDialogMessage] = useState("");
+  const [dialogType, setDialogType] = useState("INFO");
 
   const openBottomSheet = () => {
     setIsBottomSheetVisible(true);
@@ -33,35 +37,6 @@ const TabLayout = () => {
       useNativeDriver: true,
     }).start();
   };
-  useEffect(() => {
-    const checkWifiInfo = async () => {
-      if (Platform.OS === "android") {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
-        );
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-          Alert.alert("Permission required", "Please allow location access");
-          return;
-        }
-      }
-
-      const ssid = await NetworkInfo.getSSID();
-      const bssid = await NetworkInfo.getBSSID();
-
-      console.log("SSID:", ssid);
-      console.log("BSSID:", bssid);
-
-      // Optional: Match your expected WiFi
-      if (ssid !== "YOUR_WIFI_NAME" || bssid !== "xx:xx:xx:xx:xx:xx") {
-        Alert.alert(
-          "Invalid Wi-Fi",
-          "Please connect to the official office Wi-Fi before proceeding."
-        );
-      }
-    };
-
-    checkWifiInfo();
-  }, []);
 
   const closeBottomSheet = () => {
     Animated.timing(translateY, {
@@ -94,177 +69,293 @@ const TabLayout = () => {
     },
   });
 
+  useEffect(() => {
+    const checkWifiInfo = async () => {
+      if (Platform.OS === "android") {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+        );
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          console.log("Location permission denied");
+          return;
+        }
+      }
+      const ssid = await NetworkInfo.getSSID();
+      const bssid = await NetworkInfo.getBSSID();
+      console.log("SSID:", ssid);
+      console.log("BSSID:", bssid);
+    };
+    checkWifiInfo();
+  }, []);
+
   const serviceItems = [
-    { icon: "credit-card", name: "Payslips", color: "#026D94" },
-    { icon: "home", name: "WFH", color: "#026D94" },
-    { icon: "rupee-sign", name: "Expenses", color: "#026D94" },
-    { icon: "clock", name: "OT", color: "#026D94" },
-    { icon: "file-alt", name: "Report", color: "#026D94" },
-    { icon: "bullhorn", name: "Notice", color: "#026D94" },
-    { icon: "map-marker-alt", name: "Field Visit", color: "#026D94" },
-    { icon: "question-circle", name: "Help", color: "#026D94" },
+    {
+      icon: "calendar-check",
+      name: "Attend",
+      color: "#026D94",
+      disabled: false,
+    },
+    { icon: "calendar-alt", name: "Leave", color: "#026D94", disabled: false },
+    {
+      icon: "comment-alt", // FontAwesome5 message icon
+      name: "Messages",
+      color: "#026D94",
+      disabled: false,
+      type: "FontAwesome5", // optional, if you're mixing icon sets
+    },
+    { icon: "credit-card", name: "Payslips", color: "#026D94", disabled: false },
+    { icon: "home", name: "WFH", color: "#026D94", disabled: false },
+    { icon: "question-circle", name: "Help", color: "#999", disabled: true },
   ];
 
   return (
     <>
-      {/* Bottom Sheet Modal */}
-      <Modal
-        visible={isBottomSheetVisible}
-        transparent={true}
-        animationType="none"
-        onRequestClose={closeBottomSheet}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={styles.backdrop}
-            activeOpacity={1}
-            onPress={closeBottomSheet}
+      <View style={styles.container}>
+        <Modal
+          visible={isBottomSheetVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={closeBottomSheet}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity
+              style={styles.backdrop}
+              activeOpacity={1}
+              onPress={closeBottomSheet}
+            />
+            <Animated.View
+              style={[styles.bottomSheet, { transform: [{ translateY }] }]}
+              {...panResponder.panHandlers}
+            >
+              <View style={styles.dragHandle} />
+              <ScrollView style={styles.sheetScrollView}>
+                <View style={styles.sheetContent}>
+                  <View style={styles.sheetHeader}>
+                    <FontAwesome5 name="th-large" size={24} color="#026D94" />
+                    <Text style={styles.sheetTitle}>Services</Text>
+                    <Text style={styles.sheetDescription}>
+                      Select a service from the options below
+                    </Text>
+                  </View>
+                  <View style={styles.servicesGrid}>
+                    {serviceItems.map((item, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.serviceItem,
+                          item.disabled && styles.disabledServiceItem,
+                        ]}
+                        onPress={() => {
+                          if (item.disabled) {
+                            setDialogTitle("Coming Soon");
+                            setDialogMessage(
+                              `${item.name} service is under development.`
+                            );
+                            setDialogType("INFO");
+                            setDialogVisible(true);
+                            return;
+                          }
+                          closeBottomSheet();
+                          switch (item.name) {
+                            case "Attend":
+                              router.push("/(tabs)/attendance");
+                              break;
+                            case "Leave":
+                              router.push("/(tabs)/leave");
+                              break;
+                            case "WFH":
+                              router.push("/(tabs)/wfh");
+                              break;
+                            case "Payslips":
+                              router.push("/(screen)/payslips");
+                              break;
+                            case "Messages":
+                              router.push("/(screen)/chat");
+                              break;
+                            case "Holidays":
+                              router.push("/(screen)/ViewAllHolidays");
+                              break;
+                            default:
+                              console.log(`${item.name} pressed`);
+                          }
+                        }}
+                      >
+                        <View style={styles.serviceIconContainer}>
+                          <FontAwesome5
+                            name={item.icon}
+                            size={24}
+                            color={item.disabled ? "#555" : item.color}
+                          />
+                        </View>
+                        <Text
+                          style={[
+                            styles.serviceItemText,
+                            item.disabled && { color: "#555" },
+                          ]}
+                        >
+                          {item.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </ScrollView>
+            </Animated.View>
+          </View>
+        </Modal>
+
+        <Tabs
+          screenOptions={{
+            headerShown: false,
+            tabBarShowLabel: true,
+            tabBarActiveTintColor: "#026D94",
+            tabBarInactiveTintColor: "#b9b9b9",
+            tabBarLabelStyle: {
+              fontSize: moderateScale(12),
+              fontWeight: "500",
+              marginBottom: verticalScale(0),
+            },
+            tabBarIconStyle: {
+              marginBottom: verticalScale(2),
+            },
+          }}
+        >
+          <Tabs.Screen
+            name="index"
+            options={{
+              title: "Home",
+              tabBarIcon: ({ color }) => (
+                <FontAwesome5 name="home" size={20} color={color} />
+              ),
+              tabBarLabel: ({ focused }) => (
+                <Text
+                  style={{
+                    color: focused ? "#026D94" : "#b9b9b9",
+                    fontSize: moderateScale(12),
+                    fontWeight: "500",
+                    marginBottom: verticalScale(0),
+                  }}
+                >
+                  Home
+                </Text>
+              ),
+            }}
           />
-          <Animated.View
-            style={[
-              styles.bottomSheet,
-              {
-                transform: [{ translateY }],
+          <Tabs.Screen
+            name="attendance"
+            options={{
+              title: "Attendance",
+              tabBarIcon: ({ color }) => (
+                <FontAwesome5 name="calendar-check" size={20} color={color} />
+              ),
+              tabBarLabel: ({ focused }) => (
+                <Text
+                  style={{
+                    color: focused ? "#026D94" : "#b9b9b9",
+                    fontSize: moderateScale(12),
+                    fontWeight: "500",
+                    marginBottom: verticalScale(0),
+                  }}
+                >
+                  Attendance
+                </Text>
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="services"
+            options={{
+              title: "Services",
+              tabBarStyle: { display: "none" },
+              tabBarIcon: () => null,
+              tabBarButton: (props) => (
+                <View style={styles.fabContainer}>
+                  <TouchableOpacity
+                    style={styles.fabButton}
+                    onPress={openBottomSheet}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.fabCircle}>
+                      <FontAwesome5 name="th-large" size={22} color="#fff" />
+                    </View>
+                  </TouchableOpacity>
+                  <Text style={styles.fabLabel}>Services</Text>
+                </View>
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="leave"
+            options={{
+              title: "Leave",
+              tabBarIcon: ({ color }) => (
+                <FontAwesome5 name="upload" size={20} color={color} />
+              ),
+              tabBarLabel: ({ focused }) => (
+                <Text
+                  style={{
+                    color: focused ? "#026D94" : "#b9b9b9",
+                    fontSize: moderateScale(12),
+                    fontWeight: "500",
+                    marginBottom: verticalScale(0),
+                  }}
+                >
+                  Leave
+                </Text>
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="wfh"
+            options={{
+              href: null,
+            }}
+          />
+          <Tabs.Screen
+            name="TimeSlips"
+            options={{
+              title: "Time Slip",
+              tabBarIcon: ({ color }) => (
+                <FontAwesome5 name="clock" size={20} color={color} /> // Changed to "clock" for clarity
+              ),
+              tabBarLabel: ({ focused }) => (
+                <Text
+                  style={{
+                    color: focused ? "#026D94" : "#b9b9b9",
+                    fontSize: moderateScale(12),
+                    fontWeight: "500",
+                    marginBottom: verticalScale(0),
+                  }}
+                >
+                  Time Slip
+                </Text>
+              ),
+            }}
+            listeners={{
+              tabPress: (e) => {
+                router.push("/(tabs)/TimeSlips");
               },
-            ]}
-            {...panResponder.panHandlers}
-          >
-            <View style={styles.dragHandle} />
-            <ScrollView style={styles.sheetScrollView}>
-              <View style={styles.sheetContent}>
-                <View style={styles.sheetHeader}>
-                  <FontAwesome5 name="th-large" size={24} color="#026D94" />
-                  <Text style={styles.sheetTitle}>Services</Text>
-                  <Text style={styles.sheetDescription}>
-                    Select a service from the options below
-                  </Text>
-                </View>
+            }}
+          />
+        </Tabs>
 
-                {/* Services Grid */}
-                <View style={styles.servicesGrid}>
-                  {serviceItems.map((item, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.serviceItem}
-                      onPress={() => {
-                        // Handle service item press
-                        console.log(`${item.name} pressed`);
-                      }}
-                    >
-                      <View style={styles.serviceIconContainer}>
-                        <FontAwesome5
-                          name={item.icon}
-                          size={24}
-                          color={item.color}
-                        />
-                      </View>
-                      <Text style={styles.serviceItemText}>{item.name}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            </ScrollView>
-          </Animated.View>
-        </View>
-      </Modal>
-
-      {/* Bottom Tabs */}
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          tabBarStyle: {
-          // //   position: "absolute",
-          // //   bottom: 0,
-          // //   left: 0,
-          // //   right: 0,
-          // //   height: 70,
-          // //   borderTopLeftRadius: 20,
-          // //   borderTopRightRadius: 20,
-          // //   backgroundColor: "#ffffff",
-          //   elevation: 10,
-          //   shadowColor: "#000",
-          //   shadowOffset: {
-          //     width: 0,
-          //     height: -2,
-          //   },
-          //   shadowOpacity: 0.5,
-          // //   shadowRadius: 10,
-          // //   paddingBottom: 10,
-          // //   paddingTop: 10,
-          },
-          tabBarShowLabel: true,
-          tabBarActiveTintColor: "#026D94",
-          tabBarInactiveTintColor: "#b9b9b9",
-          tabBarLabelStyle: {
-            fontSize: 12,
-            fontWeight: "500",
-            marginTop: 5,
-          },
-        }}
-      >
-        <Tabs.Screen
-          name="index"
-          options={{
-            title: "Home",
-            tabBarIcon: ({ color }) => (
-              <FontAwesome5 name="home" size={20} color={color} />
-            ),
-          }}
+        <CustomDialog
+          isVisible={dialogVisible}
+          type={dialogType}
+          title={dialogTitle}
+          message={dialogMessage}
+          onConfirm={() => setDialogVisible(false)}
         />
-        <Tabs.Screen
-          name="attendance"
-          options={{
-            title: "Attendance",
-            tabBarIcon: ({ color }) => (
-              <FontAwesome5 name="calendar-check" size={20} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="services"
-          options={{
-            title: "Services",
-            tabBarIcon: () => null,
-            tabBarButton: () => (
-              <TouchableOpacity
-                style={styles.fabButton}
-                onPress={openBottomSheet}
-              >
-                <View style={styles.fabCircle}>
-                  <FontAwesome5 name="th-large" size={24} color="#fff" />
-                </View>
-                {/* Add label manually */}
-                <Text style={styles.fabLabel}>Services</Text>
-              </TouchableOpacity>
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="leave"
-          options={{
-            title: "Leave",
-            tabBarIcon: ({ color }) => (
-              <FontAwesome5 name="upload" size={20} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="message"
-          options={{
-            title: "Message",
-            tabBarIcon: ({ color }) => (
-              <FontAwesome5 name="envelope" size={20} color={color} />
-            ),
-          }}
-        />
-      </Tabs>
+      </View>
     </>
   );
 };
 
 const styles = StyleSheet.create({
-  // Modal Styles
+  container: {
+    flex: 1,
+    backgroundColor: "#ffffff",
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
@@ -277,8 +368,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     borderTopLeftRadius: moderateScale(20),
     borderTopRightRadius: moderateScale(20),
-    minHeight: "45%",
-    maxHeight: "80%",
+    height: "45%",
     elevation: 10,
     shadowColor: "#000",
     shadowOffset: {
@@ -294,7 +384,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#026D94",
     borderRadius: 2,
     alignSelf: "center",
-    marginVertical: 10,
+    marginVertical: verticalScale(10),
   },
   sheetScrollView: {
     flex: 1,
@@ -302,11 +392,12 @@ const styles = StyleSheet.create({
   sheetContent: {
     flex: 1,
     paddingHorizontal: horizontalScale(20),
-    paddingBottom: verticalScale(20),
+    paddingBottom: verticalScale(30),
   },
   sheetHeader: {
     alignItems: "center",
-    marginBottom: verticalScale(30),
+    marginBottom: verticalScale(20),
+    paddingTop: verticalScale(10),
   },
   sheetTitle: {
     fontSize: moderateScale(20),
@@ -320,13 +411,11 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "center",
   },
-
-  // Services Grid Styles
   servicesGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    paddingHorizontal: horizontalScale(10),
+    paddingHorizontal: horizontalScale(5),
   },
   serviceItem: {
     width: "23%",
@@ -335,7 +424,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#f8f9fa",
     borderRadius: moderateScale(12),
-    marginBottom: verticalScale(20),
+    marginBottom: verticalScale(15),
     borderWidth: 1,
     borderColor: "#e9ecef",
     padding: moderateScale(10),
@@ -350,37 +439,44 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     lineHeight: moderateScale(14),
   },
-
-  // FAB Button Styles
-  fabButton: {
-    top: verticalScale(-30),
+  fabContainer: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    marginTop: verticalScale(-35),
+  },
+  fabButton: {
+    alignItems: "center",
+    justifyContent: "center",
   },
   fabCircle: {
-    width: horizontalScale(60),
-    height: verticalScale(60),
-    // borderRadius: 28,
+    width: horizontalScale(56),
+    height: horizontalScale(56),
     backgroundColor: "#026D94",
+    borderRadius: horizontalScale(28),
     justifyContent: "center",
     alignItems: "center",
-    elevation: 6,
+    elevation: 8,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
       height: 4,
     },
     shadowOpacity: 0.3,
-    shadowRadius: 5,
-    borderWidth: 5,
-    borderRadius: moderateScale(100),
+    shadowRadius: 6,
     borderColor: "#fff",
+    borderWidth: 3,
   },
   fabLabel: {
-    marginTop: 4,
-    fontSize: 12,
-    color: "#000",
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(11),
+    color: "#026D94",
     fontWeight: "500",
+    textAlign: "center",
+  },
+  disabledServiceItem: {
+    backgroundColor: "#f8f9fa",
+    borderColor: "#d0d0d0",
   },
 });
 
