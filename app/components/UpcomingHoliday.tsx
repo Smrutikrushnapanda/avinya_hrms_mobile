@@ -3,7 +3,6 @@ import UpcomingHolidaySkeleton from "app/Loaders/UpcomingHolidaySkeleton";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  Alert,
   Dimensions,
   FlatList,
   StyleSheet,
@@ -15,6 +14,7 @@ import {
 import { getHolidaysByFinancialYear } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
 import { darkTheme, lightTheme } from "../constants/colors";
+import CustomDialog from "./CustomDialog";
 
 const { width: screenWidth } = Dimensions.get('window');
 const CARD_WIDTH = screenWidth - 60; // Full width minus padding
@@ -28,6 +28,32 @@ const UpcomingHoliday = () => {
   const [holidays, setHolidays] = useState([]);
   const [loading, setLoading] = useState(true);
   const [upcomingHolidays, setUpcomingHolidays] = useState([]);
+  const [dialogVisible, setDialogVisible] = useState<boolean>(false);
+  const [dialogType, setDialogType] = useState<string>("INFO");
+  const [dialogTitle, setDialogTitle] = useState<string>("");
+  const [dialogMessage, setDialogMessage] = useState<string>("");
+  const [dialogButtons, setDialogButtons] = useState<Array<{text: string, onPress: () => void, style?: 'default' | 'cancel' | 'destructive'}>>([]);
+
+  const showDialog = (
+    type: string,
+    title: string,
+    message: string,
+    buttons?: {text: string, onPress?: () => void, style?: 'default' | 'cancel' | 'destructive'}[]
+  ) => {
+    setDialogType(type);
+    setDialogTitle(title);
+    setDialogMessage(message);
+    if (buttons && buttons.length > 0) {
+      setDialogButtons(buttons.map(btn => ({
+        text: btn.text,
+        onPress: btn.onPress || (() => setDialogVisible(false)),
+        style: btn.style
+      })));
+    } else {
+      setDialogButtons([{ text: "OK", onPress: () => setDialogVisible(false) }]);
+    }
+    setDialogVisible(true);
+  };
 
   const orgId = user?.organizationId;
 
@@ -61,7 +87,7 @@ const UpcomingHoliday = () => {
       }
     } catch (error) {
       console.error("Failed to fetch holidays:", error);
-      Alert.alert("Error", "Failed to fetch holidays. Please try again.");
+      showDialog("DANGER", "Error", "Failed to fetch holidays. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -203,20 +229,26 @@ const UpcomingHoliday = () => {
 
   if (loading) {
     return (
-      <View>
-        <UpcomingHolidaySkeleton />
-      </View>
+      <>
+        <View>
+          <UpcomingHolidaySkeleton />
+        </View>
+        <CustomDialog isVisible={dialogVisible} type={dialogType as any} title={dialogTitle} message={dialogMessage} buttons={dialogButtons} onCancel={() => setDialogVisible(false)} />
+      </>
     );
   }
 
   if (upcomingHolidays.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
-        <Ionicons name="calendar-outline" size={40} color="#ccc" />
-        <Text style={[styles.emptyText, { color: "#999" }]}>
-          No upcoming holidays
-        </Text>
-      </View>
+      <>
+        <View style={styles.emptyContainer}>
+          <Ionicons name="calendar-outline" size={40} color="#ccc" />
+          <Text style={[styles.emptyText, { color: "#999" }]}>
+            No upcoming holidays
+          </Text>
+        </View>
+        <CustomDialog isVisible={dialogVisible} type={dialogType as any} title={dialogTitle} message={dialogMessage} buttons={dialogButtons} onCancel={() => setDialogVisible(false)} />
+      </>
     );
   }
 
@@ -244,6 +276,7 @@ const UpcomingHoliday = () => {
         decelerationRate="fast"
         pagingEnabled={true}
       />
+      <CustomDialog isVisible={dialogVisible} type={dialogType as any} title={dialogTitle} message={dialogMessage} buttons={dialogButtons} onCancel={() => setDialogVisible(false)} />
     </View>
   );
 };

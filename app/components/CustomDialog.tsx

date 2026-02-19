@@ -13,6 +13,12 @@ const { width } = Dimensions.get('window');
 
 type DialogType = 'SUCCESS' | 'DANGER' | 'WARNING' | 'INFO';
 
+interface DialogButton {
+  text: string;
+  onPress: () => void;
+  style?: 'default' | 'cancel' | 'destructive';
+}
+
 interface DialogConfig {
   animation: any;
   backgroundColor: string;
@@ -20,20 +26,14 @@ interface DialogConfig {
   buttonColor: string;
 }
 
-interface DialogButton {
-  text: string;
-  onPress: () => void;
-  style?: 'default' | 'cancel' | 'destructive';
-}
-
 interface CustomDialogProps {
   isVisible: boolean;
   type: DialogType;
   title: string;
   message: string;
+  buttons?: DialogButton[];
   onConfirm?: () => void;
   onCancel?: () => void;
-  buttons?: DialogButton[];
   autoCloseTimeout?: number;
 }
 
@@ -69,30 +69,28 @@ const CustomDialog: React.FC<CustomDialogProps> = ({
   type,
   title,
   message,
+  buttons,
   onConfirm,
   onCancel,
-  buttons,
   autoCloseTimeout = 0,
 }) => {
   const config = DIALOG_TYPES[type] || DIALOG_TYPES.INFO;
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const defaultAction = () => {
-    if (buttons && buttons.length > 0) {
-      buttons[0].onPress();
-    } else if (onConfirm) {
-      onConfirm();
-    }
-  };
 
   useEffect(() => {
     if (isVisible && autoCloseTimeout > 0) {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
-
+      
       timeoutRef.current = setTimeout(() => {
-        defaultAction();
+        if (onConfirm) {
+          onConfirm();
+        } else if (buttons && buttons.length > 0) {
+          buttons[0].onPress();
+        } else {
+          onCancel?.();
+        }
       }, autoCloseTimeout);
     }
 
@@ -102,7 +100,15 @@ const CustomDialog: React.FC<CustomDialogProps> = ({
         timeoutRef.current = null;
       }
     };
-  }, [isVisible, autoCloseTimeout]);
+  }, [isVisible, autoCloseTimeout, onConfirm, buttons, onCancel]);
+
+  const handleButtonPress = (button: DialogButton) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    button.onPress();
+  };
 
   const handleCancel = () => {
     if (timeoutRef.current) {
@@ -112,11 +118,15 @@ const CustomDialog: React.FC<CustomDialogProps> = ({
     onCancel?.();
   };
 
-  if (!isVisible) return null;
+  // If buttons are provided, use them; otherwise create a default OK button
+  const displayButtons = buttons && buttons.length > 0 
+    ? buttons 
+    : onConfirm 
+      ? [{ text: 'OK', onPress: onConfirm, style: 'default' as const }]
+      : [{ text: 'OK', onPress: handleCancel, style: 'default' as const }];
 
-  const resolvedButtons: DialogButton[] = buttons && buttons.length > 0
-    ? buttons
-    : [{ text: "OK", onPress: onConfirm || (() => {}), style: 'default' as const }];
+  // Don't render if not visible
+  if (!isVisible) return null;
 
   return (
     <Modal
@@ -139,7 +149,7 @@ const CustomDialog: React.FC<CustomDialogProps> = ({
         ]}
       >
         <View style={styles.glassOverlay} />
-
+        
         <LottieView
           source={config.animation}
           autoPlay
@@ -148,31 +158,28 @@ const CustomDialog: React.FC<CustomDialogProps> = ({
         />
         <Text style={[styles.title, { color: config.textColor }]}>{title}</Text>
         <Text style={styles.message}>{message}</Text>
-
-        <View style={styles.buttonRow}>
-          {resolvedButtons.map((btn, index) => (
+        
+        <View style={styles.buttonContainer}>
+          {displayButtons.map((button, index) => (
             <TouchableOpacity
               key={index}
               style={[
-                styles.confirmButton,
-                btn.style === 'cancel'
-                  ? styles.cancelButton
-                  : { backgroundColor: config.buttonColor },
-                resolvedButtons.length > 1 && { flex: 1, marginHorizontal: 4 },
+                styles.button,
+                { backgroundColor: config.buttonColor },
+                button.style === 'cancel' && styles.cancelButton,
+                button.style === 'destructive' && styles.destructiveButton,
+                displayButtons.length === 1 && styles.singleButton,
+                displayButtons.length === 2 && styles.doubleButton,
               ]}
-              onPress={() => {
-                if (timeoutRef.current) {
-                  clearTimeout(timeoutRef.current);
-                  timeoutRef.current = null;
-                }
-                btn.onPress();
-              }}
+              onPress={() => handleButtonPress(button)}
               activeOpacity={0.8}
             >
               <Text style={[
                 styles.buttonText,
-                btn.style === 'cancel' && styles.cancelButtonText,
-              ]}>{btn.text}</Text>
+                button.style === 'cancel' && styles.cancelButtonText,
+              ]}>
+                {button.text}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -188,7 +195,7 @@ const styles = StyleSheet.create({
     margin: 0,
   },
   dialogContainer: {
-    width: width * 0.8,
+    width: width * 0.85,
     padding: 25,
     borderRadius: 20,
     alignItems: 'center',
@@ -234,17 +241,18 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     zIndex: 1,
   },
-  buttonRow: {
+  buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
     width: '100%',
     zIndex: 1,
   },
-  confirmButton: {
-    paddingHorizontal: 30,
+  button: {
+    paddingHorizontal: 25,
     paddingVertical: 12,
     borderRadius: 25,
-    minWidth: 120,
+    minWidth: 100,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -255,12 +263,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 4,
-    zIndex: 1,
+    marginHorizontal: 5,
+  },
+  singleButton: {
+    minWidth: 150,
+  },
+  doubleButton: {
+    minWidth: 120,
+    flex: 1,
+    maxWidth: 150,
   },
   cancelButton: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ccc',
+    backgroundColor: '#9E9E9E',
+  },
+  destructiveButton: {
+    backgroundColor: '#F44336',
   },
   buttonText: {
     color: '#fff',
@@ -270,8 +287,9 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   cancelButtonText: {
-    color: '#666',
+    color: '#fff',
   },
 });
 
 export default CustomDialog;
+

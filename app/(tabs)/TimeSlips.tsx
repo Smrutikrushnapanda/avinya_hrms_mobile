@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import Header from "app/components/Header";
+import AdminTabHeader from "app/components/AdminTabHeader";
 import { darkTheme, lightTheme } from "app/constants/colors";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
@@ -420,7 +420,7 @@ export default function TimeSlips() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header title="Time Slips" />
+      <AdminTabHeader title="Time Slips" />
       <View style={styles.cardWrapper}>
         <View style={[styles.card, { backgroundColor: colors.white }]}>
           <View style={styles.triangle} />

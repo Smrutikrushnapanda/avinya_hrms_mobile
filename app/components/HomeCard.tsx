@@ -286,7 +286,7 @@ export default HomeCard;
 
 const styles = StyleSheet.create({
   cardWrapper: {
-    marginTop: -100,
+    marginTop: 0,
     paddingHorizontal: 20,
     zIndex: 10,
   },

@@ -7,7 +7,6 @@ import * as Sharing from "expo-sharing";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   RefreshControl,
   ScrollView,
@@ -17,6 +16,7 @@ import {
   View,
   useColorScheme,
 } from "react-native";
+import CustomDialog from "../components/CustomDialog";
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import api, { getEmployeeProfile, getPayrollRecords } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
@@ -46,6 +46,33 @@ const Payslips = () => {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
 
+  const [dialogVisible, setDialogVisible] = useState<boolean>(false);
+  const [dialogType, setDialogType] = useState<string>("INFO");
+  const [dialogTitle, setDialogTitle] = useState<string>("");
+  const [dialogMessage, setDialogMessage] = useState<string>("");
+  const [dialogButtons, setDialogButtons] = useState<Array<{text: string, onPress: () => void, style?: 'default' | 'cancel' | 'destructive'}>>([]);
+
+  const showDialog = (
+    type: string,
+    title: string,
+    message: string,
+    buttons?: {text: string, onPress?: () => void, style?: 'default' | 'cancel' | 'destructive'}[]
+  ) => {
+    setDialogType(type);
+    setDialogTitle(title);
+    setDialogMessage(message);
+    if (buttons && buttons.length > 0) {
+      setDialogButtons(buttons.map(btn => ({
+        text: btn.text,
+        onPress: btn.onPress || (() => setDialogVisible(false)),
+        style: btn.style
+      })));
+    } else {
+      setDialogButtons([{ text: "OK", onPress: () => setDialogVisible(false) }]);
+    }
+    setDialogVisible(true);
+  };
+
   // Initialize auth once on mount
   useEffect(() => {
     const init = async () => {
@@ -63,7 +90,7 @@ const Payslips = () => {
 
     if (!user?.userId) {
       setLoading(false);
-      Alert.alert("Error", "User not authenticated. Please login again.");
+      showDialog("DANGER", "Error", "User not authenticated. Please login again.");
       router.replace("/(auth)/Login");
       return;
     }
@@ -94,7 +121,7 @@ const Payslips = () => {
       setRecords(res.data?.data || []);
     } catch (error: any) {
       console.error("Error fetching payslips:", error);
-      Alert.alert("Error", error?.message || "Failed to load payslips");
+      showDialog("DANGER", "Error", error?.message || "Failed to load payslips");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -130,10 +157,10 @@ const Payslips = () => {
           dialogTitle: "Save or Share Payslip",
         });
       } else {
-        Alert.alert("Downloaded", "Payslip saved to app storage.");
+        showDialog("SUCCESS", "Downloaded", "Payslip saved to app storage.");
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to download payslip.");
+      showDialog("DANGER", "Error", "Failed to download payslip.");
     } finally {
       setDownloadingId(null);
     }
@@ -174,6 +201,7 @@ const Payslips = () => {
         <Text style={[styles.loadingText, { color: colors.text }]}>
           Loading payslips...
         </Text>
+        <CustomDialog isVisible={dialogVisible} type={dialogType as any} title={dialogTitle} message={dialogMessage} buttons={dialogButtons} onCancel={() => setDialogVisible(false)} />
       </View>
     );
   }
@@ -335,6 +363,7 @@ const Payslips = () => {
           </View>
         )}
       </ScrollView>
+      <CustomDialog isVisible={dialogVisible} type={dialogType as any} title={dialogTitle} message={dialogMessage} buttons={dialogButtons} onCancel={() => setDialogVisible(false)} />
     </View>
   );
 };

@@ -6,7 +6,6 @@ import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   StyleSheet,
   Text,
@@ -15,6 +14,7 @@ import {
   View,
   useColorScheme,
 } from "react-native";
+import CustomDialog from "../components/CustomDialog";
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import { applyLeave, getLeaveTypes } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
@@ -32,6 +32,33 @@ const LeaveForm = () => {
   const [reason, setReason] = useState("");
   const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
   const [submitting, setSubmitting] = useState(false);
+
+  const [dialogVisible, setDialogVisible] = useState<boolean>(false);
+  const [dialogType, setDialogType] = useState<string>("INFO");
+  const [dialogTitle, setDialogTitle] = useState<string>("");
+  const [dialogMessage, setDialogMessage] = useState<string>("");
+  const [dialogButtons, setDialogButtons] = useState<Array<{text: string, onPress: () => void, style?: 'default' | 'cancel' | 'destructive'}>>([]);
+
+  const showDialog = (
+    type: string,
+    title: string,
+    message: string,
+    buttons?: {text: string, onPress?: () => void, style?: 'default' | 'cancel' | 'destructive'}[]
+  ) => {
+    setDialogType(type);
+    setDialogTitle(title);
+    setDialogMessage(message);
+    if (buttons && buttons.length > 0) {
+      setDialogButtons(buttons.map(btn => ({
+        text: btn.text,
+        onPress: btn.onPress || (() => setDialogVisible(false)),
+        style: btn.style
+      })));
+    } else {
+      setDialogButtons([{ text: "OK", onPress: () => setDialogVisible(false) }]);
+    }
+    setDialogVisible(true);
+  };
 
   const { user } = useAuthStore();
   const userId = user?.userId;
@@ -86,7 +113,7 @@ const LeaveForm = () => {
         const data = res.data || [];
         setLeaveTypes(Array.isArray(data) ? data : []);
       } catch (error) {
-        Alert.alert("Leave Types", "Failed to load leave types.");
+        showDialog("DANGER", "Leave Types", "Failed to load leave types.");
       }
     };
     loadLeaveTypes();
@@ -94,15 +121,15 @@ const LeaveForm = () => {
 
   const handleSubmit = async () => {
     if (!userId) {
-      Alert.alert("Leave Application", "User not found. Please login again.");
+      showDialog("DANGER", "Leave Application", "User not found. Please login again.");
       return;
     }
     if (!leaveTypeId) {
-      Alert.alert("Leave Application", "Please select a leave type.");
+      showDialog("WARNING", "Leave Application", "Please select a leave type.");
       return;
     }
     if (startDate > endDate) {
-      Alert.alert("Leave Application", "End date must be after start date.");
+      showDialog("WARNING", "Leave Application", "End date must be after start date.");
       return;
     }
 
@@ -114,14 +141,14 @@ const LeaveForm = () => {
         endDate: endDate.toISOString().split("T")[0],
         reason: reason.trim(),
       });
-      Alert.alert("Success", "Leave request submitted.", [
-        { text: "OK", onPress: () => route.replace("/(tabs)/leave") },
+      showDialog("SUCCESS", "Success", "Leave request submitted.", [
+        { text: "OK", onPress: () => { setDialogVisible(false); route.replace("/(tabs)/leave"); } },
       ]);
     } catch (error: any) {
       console.error("Apply leave failed:", error);
       const message =
         error?.response?.data?.message || "Failed to submit leave request.";
-      Alert.alert("Leave Application", message);
+      showDialog("DANGER", "Leave Application", message);
     } finally {
       setSubmitting(false);
     }
@@ -244,6 +271,7 @@ const LeaveForm = () => {
           </View>
         </View>
       </View>
+      <CustomDialog isVisible={dialogVisible} type={dialogType as any} title={dialogTitle} message={dialogMessage} buttons={dialogButtons} onCancel={() => setDialogVisible(false)} />
     </View>
   );
 };

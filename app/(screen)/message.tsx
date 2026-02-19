@@ -20,7 +20,8 @@ import useAuthStore from "../../store/useUserStore";
 import { io, Socket } from "socket.io-client";
 import useMessageStore from "../../store/useMessageStore";
 
-const SOCKET_URL = "http://10.0.2.2:8080";
+const SOCKET_URL =
+  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinya-hrms-backend.onrender.com";
 
 type MessageItem = {
   id: string;

@@ -7,8 +7,8 @@ const cloudFallbackURL = "https://avinya-hrms-backend.onrender.com";
 const localFallbackURL = "http://10.0.2.2:8080";
 const envOverrideURL =
   process.env.EXPO_PUBLIC_API_BASE_URL || process.env.EXPO_PUBLIC_LOCAL_API_BASE_URL;
-const isDev = process.env.NODE_ENV === "development";
-const apiBaseURL = envOverrideURL || (isDev ? localFallbackURL : cloudFallbackURL);
+// Default to hosted backend when no env override is provided.
+const apiBaseURL = envOverrideURL || cloudFallbackURL;
 
 
 // Axios instance configuration

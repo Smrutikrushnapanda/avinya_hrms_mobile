@@ -6,7 +6,6 @@ import * as ImagePicker from "expo-image-picker";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Dimensions,
   Image,
@@ -22,6 +21,7 @@ import {
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import { logout as apiLogout, getEmployeeProfile } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
+import CustomDialog from "../components/CustomDialog";
 import { darkTheme, lightTheme } from "../constants/colors";
 
 // Define interfaces for type safety
@@ -114,6 +114,43 @@ const STORAGE_KEYS = {
 // Cache duration (24 hours in milliseconds)
 const CACHE_DURATION = 24 * 60 * 60 * 1000;
 
+// Accordion component defined OUTSIDE ProfilePage to avoid re-creation on every render
+const AccordionSection: React.FC<{
+  id: "general" | "personal" | "documents" | "policy";
+  title: string;
+  icon: any;
+  children: React.ReactNode;
+  openSection: "general" | "personal" | "documents" | "policy" | null;
+  setOpenSection: React.Dispatch<
+    React.SetStateAction<"general" | "personal" | "documents" | "policy" | null>
+  >;
+  colors: Theme;
+}> = ({ id, title, icon, children, openSection, setOpenSection, colors }) => {
+  const isOpen = openSection === id;
+  return (
+    <View style={[styles.accordionSection, { backgroundColor: colors.white }]}>
+      <TouchableOpacity
+        style={styles.accordionHeader}
+        onPress={() => setOpenSection((prev) => (prev === id ? null : id))}
+        activeOpacity={0.7}
+      >
+        <View style={styles.accordionHeaderLeft}>
+          <Ionicons name={icon} size={18} color={colors.primary} />
+          <Text style={[styles.accordionTitle, { color: colors.text }]}>
+            {title}
+          </Text>
+        </View>
+        <Ionicons
+          name={isOpen ? "chevron-up" : "chevron-down"}
+          size={18}
+          color={colors.grey}
+        />
+      </TouchableOpacity>
+      {isOpen && <View style={styles.accordionBody}>{children}</View>}
+    </View>
+  );
+};
+
 const ProfilePage: React.FC = () => {
   const systemColorScheme = useColorScheme() ?? "light";
   const [isDarkMode, setIsDarkMode] = useState<boolean>(
@@ -131,8 +168,35 @@ const ProfilePage: React.FC = () => {
   const [modalImageUri, setModalImageUri] = useState<string | null>(null);
   const [localPhotoUri, setLocalPhotoUri] = useState<string | null>(null);
   const [openSection, setOpenSection] = useState<
-    "general" | "personal" | "documents" | "policy"
+    "general" | "personal" | "documents" | "policy" | null
   >("general");
+
+  const [dialogVisible, setDialogVisible] = useState<boolean>(false);
+  const [dialogType, setDialogType] = useState<string>("INFO");
+  const [dialogTitle, setDialogTitle] = useState<string>("");
+  const [dialogMessage, setDialogMessage] = useState<string>("");
+  const [dialogButtons, setDialogButtons] = useState<Array<{text: string, onPress: () => void, style?: 'default' | 'cancel' | 'destructive'}>>([]);
+
+  const showDialog = (
+    type: string,
+    title: string,
+    message: string,
+    buttons?: {text: string, onPress?: () => void, style?: 'default' | 'cancel' | 'destructive'}[]
+  ) => {
+    setDialogType(type);
+    setDialogTitle(title);
+    setDialogMessage(message);
+    if (buttons && buttons.length > 0) {
+      setDialogButtons(buttons.map(btn => ({
+        text: btn.text,
+        onPress: btn.onPress || (() => setDialogVisible(false)),
+        style: btn.style
+      })));
+    } else {
+      setDialogButtons([{ text: "OK", onPress: () => setDialogVisible(false) }]);
+    }
+    setDialogVisible(true);
+  };
 
   const router = useRouter();
   const { user, clearAuth } = useAuthStore();
@@ -173,7 +237,7 @@ const ProfilePage: React.FC = () => {
       await fetchProfileData();
     } catch (error) {
       console.error("Error initializing profile:", error);
-      Alert.alert("Error", "Failed to initialize profile data.");
+      showDialog("DANGER", "Error", "Failed to initialize profile data.");
       setIsLoadingProfile(false);
     }
   };
@@ -244,7 +308,7 @@ const ProfilePage: React.FC = () => {
     if (!user?.userId) {
       console.log("No user ID available, skipping profile fetch");
       setIsLoadingProfile(false);
-      Alert.alert("Error", "User ID not found. Please log in again.");
+      showDialog("DANGER", "Error", "User ID not found. Please log in again.");
       router.replace("/(auth)/Login");
       return;
     }
@@ -296,7 +360,7 @@ const ProfilePage: React.FC = () => {
           await saveProfileToCache(fallbackData);
         }
       }
-      Alert.alert("Error", `Failed to fetch profile data: ${error.message}`);
+      showDialog("DANGER", "Error", `Failed to fetch profile data: ${error.message}`);
     } finally {
       setIsLoadingProfile(false);
       if (isRefresh) setRefreshing(false);
@@ -326,7 +390,7 @@ const ProfilePage: React.FC = () => {
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Permission required", "Allow photo access to continue.");
+        showDialog("WARNING", "Permission Required", "Allow photo access to continue.");
         return;
       }
 
@@ -343,66 +407,67 @@ const ProfilePage: React.FC = () => {
       }
     } catch (error) {
       console.error("Error picking local photo:", error);
-      Alert.alert("Error", "Failed to update profile photo.");
+      showDialog("DANGER", "Error", "Failed to update profile photo.");
     }
   };
 
-  const handleLogout = async (): Promise<void> => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
+  const performLogout = async (): Promise<void> => {
+    try {
+      setDialogVisible(false);
+      setIsLoggingOut(true);
+
+      // Clear AsyncStorage including profile cache
+      await AsyncStorage.multiRemove([
+        "token",
+        "user",
+        "userToken",
+        "refreshToken",
+        "sessionId",
+        "authData",
+        "userSession",
+        "loginCredentials",
+        STORAGE_KEYS.PROFILE_DATA,
+        STORAGE_KEYS.PROFILE_TIMESTAMP,
+        STORAGE_KEYS.LOCAL_PROFILE_PHOTO,
+      ]);
+
+      // Call API logout if needed (optional)
+      try {
+        if (user?.userName && user?.email) {
+          await apiLogout();
+        }
+      } catch (logoutError) {
+        console.log(
+          "API logout failed, but continuing with local logout:",
+          logoutError
+        );
+      }
+
+      // Clear auth store
+      await clearAuth();
+      setProfileData(null);
+
+      // Navigate to login
+      router.replace("/(auth)/Login");
+    } catch (error) {
+      console.error("Logout error:", error);
+      showDialog("DANGER", "Error", "Failed to logout completely. Please try again.");
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
+  const handleLogout = (): void => {
+    showDialog("WARNING", "Logout", "Are you sure you want to logout?", [
       {
         text: "Cancel",
+        onPress: () => setDialogVisible(false),
         style: "cancel",
       },
       {
         text: "Logout",
+        onPress: () => performLogout(),
         style: "destructive",
-        onPress: async () => {
-          try {
-            setIsLoggingOut(true);
-
-            // Clear AsyncStorage including profile cache
-            await AsyncStorage.multiRemove([
-              "token",
-              "user",
-              "userToken",
-              "refreshToken",
-              "sessionId",
-              "authData",
-              "userSession",
-              "loginCredentials",
-              STORAGE_KEYS.PROFILE_DATA,
-              STORAGE_KEYS.PROFILE_TIMESTAMP,
-              STORAGE_KEYS.LOCAL_PROFILE_PHOTO,
-            ]);
-
-            // Call API logout if needed (optional)
-            try {
-              if (user?.userName && user?.email) {
-                await apiLogout();
-              }
-            } catch (logoutError) {
-              console.log(
-                "API logout failed, but continuing with local logout:",
-                logoutError
-              );
-            }
-
-            // Clear auth store
-            await clearAuth();
-            setProfileData(null);
-
-            // Navigate to login
-            router.replace("/(auth)/Login");
-          } catch (error) {
-            console.error("Logout error:", error);
-            Alert.alert(
-              "Error",
-              "Failed to logout completely. Please try again."
-            );
-          } finally {
-            setIsLoggingOut(false);
-          }
-        },
       },
     ]);
   };
@@ -560,37 +625,6 @@ const ProfilePage: React.FC = () => {
   );
 
 
-  const AccordionSection: React.FC<{
-    id: "general" | "personal" | "documents" | "policy";
-    title: string;
-    icon: string;
-    children: React.ReactNode;
-  }> = ({ id, title, icon, children }) => {
-    const isOpen = openSection === id;
-    return (
-      <View style={[styles.accordionSection, { backgroundColor: colors.white }]}>
-        <TouchableOpacity
-          style={styles.accordionHeader}
-          onPress={() => setOpenSection(id)}
-          activeOpacity={0.8}
-        >
-          <View style={styles.accordionHeaderLeft}>
-            <Ionicons name={icon} size={18} color={colors.primary} />
-            <Text style={[styles.accordionTitle, { color: colors.text }]}>
-              {title}
-            </Text>
-          </View>
-          <Ionicons
-            name={isOpen ? "chevron-up" : "chevron-down"}
-            size={18}
-            color={colors.grey}
-          />
-        </TouchableOpacity>
-        {isOpen && <View style={styles.accordionBody}>{children}</View>}
-      </View>
-    );
-  };
-
   const DocumentItem: React.FC<{
     label: string;
     uri?: string;
@@ -725,6 +759,9 @@ const ProfilePage: React.FC = () => {
           id="general"
           title="General Info"
           icon="briefcase-outline"
+          openSection={openSection}
+          setOpenSection={setOpenSection}
+          colors={colors}
         >
           <InfoItem
             icon="id-card-outline"
@@ -784,6 +821,9 @@ const ProfilePage: React.FC = () => {
           id="personal"
           title="Personal Info"
           icon="person-outline"
+          openSection={openSection}
+          setOpenSection={setOpenSection}
+          colors={colors}
         >
           <InfoItem
             icon="mail-outline"
@@ -823,6 +863,9 @@ const ProfilePage: React.FC = () => {
           id="documents"
           title="Documents Center"
           icon="document-text-outline"
+          openSection={openSection}
+          setOpenSection={setOpenSection}
+          colors={colors}
         >
           <View style={styles.documentGrid}>
             <DocumentItem
@@ -844,6 +887,9 @@ const ProfilePage: React.FC = () => {
           id="policy"
           title="Company Policy"
           icon="shield-checkmark-outline"
+          openSection={openSection}
+          setOpenSection={setOpenSection}
+          colors={colors}
         >
           <View style={styles.policyCard}>
             <Text style={[styles.policyText, { color: colors.text }]}>
@@ -867,6 +913,15 @@ const ProfilePage: React.FC = () => {
           />
         </View>
       </ScrollView>
+
+      <CustomDialog
+        isVisible={dialogVisible}
+        type={dialogType as any}
+        title={dialogTitle}
+        message={dialogMessage}
+        buttons={dialogButtons}
+        onCancel={() => setDialogVisible(false)}
+      />
 
       {/* Image Modal */}
       <Modal

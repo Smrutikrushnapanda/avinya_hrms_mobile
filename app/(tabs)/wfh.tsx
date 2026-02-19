@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import Header from "app/components/Header";
+import AdminTabHeader from "app/components/AdminTabHeader";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -141,7 +141,7 @@ const Wfh = () => {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.contentWrapper}>
-        <Header title="WFH" />
+        <AdminTabHeader title="WFH" />
 
         <View style={styles.cardWrapper}>
           <View style={[styles.card, { backgroundColor: colors.white }]}>

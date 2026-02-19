@@ -9,7 +9,8 @@ import { io, Socket } from "socket.io-client";
 import useAuthStore from "../store/useUserStore";
 import { getEmployees } from "../api/api";
 
-const SOCKET_URL = "http://10.0.2.2:8080";
+const SOCKET_URL =
+  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinya-hrms-backend.onrender.com";
 
 export default function RootLayout() {
   Appearance.setColorScheme("light");
@@ -93,7 +94,7 @@ export default function RootLayout() {
     <AlertNotificationRoot>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
-          <StatusBar style="light" translucent={true} backgroundColor="transparent" />
+          <StatusBar style="light" translucent={true} />
           {banner.visible && (
             <TouchableOpacity
               style={styles.banner}

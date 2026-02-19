@@ -17,7 +17,8 @@ import { getInboxMessages } from "../../api/api";
 import { io, Socket } from "socket.io-client";
 import HeaderBackground from "./HeaderBackground";
 
-const SOCKET_URL = "http://10.0.2.2:8080";
+const SOCKET_URL =
+  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinya-hrms-backend.onrender.com";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -150,7 +151,6 @@ const TabHeader = () => {
 
 const styles = StyleSheet.create({
   headerContainer: {
-    backgroundColor: "#1e7ba8",
     paddingBottom: 110,
   },
   header: {

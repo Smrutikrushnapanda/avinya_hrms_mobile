@@ -5,7 +5,6 @@ import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   StyleSheet,
   Text,
@@ -14,6 +13,7 @@ import {
   View,
   useColorScheme,
 } from "react-native";
+import CustomDialog from "../components/CustomDialog";
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import { applyWfh } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
@@ -32,6 +32,33 @@ const WfhForm = () => {
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const [dialogVisible, setDialogVisible] = useState<boolean>(false);
+  const [dialogType, setDialogType] = useState<string>("INFO");
+  const [dialogTitle, setDialogTitle] = useState<string>("");
+  const [dialogMessage, setDialogMessage] = useState<string>("");
+  const [dialogButtons, setDialogButtons] = useState<Array<{text: string, onPress: () => void, style?: 'default' | 'cancel' | 'destructive'}>>([]);
+
+  const showDialog = (
+    type: string,
+    title: string,
+    message: string,
+    buttons?: {text: string, onPress?: () => void, style?: 'default' | 'cancel' | 'destructive'}[]
+  ) => {
+    setDialogType(type);
+    setDialogTitle(title);
+    setDialogMessage(message);
+    if (buttons && buttons.length > 0) {
+      setDialogButtons(buttons.map(btn => ({
+        text: btn.text,
+        onPress: btn.onPress || (() => setDialogVisible(false)),
+        style: btn.style
+      })));
+    } else {
+      setDialogButtons([{ text: "OK", onPress: () => setDialogVisible(false) }]);
+    }
+    setDialogVisible(true);
+  };
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -70,11 +97,11 @@ const WfhForm = () => {
 
   const handleSubmit = async () => {
     if (!userId) {
-      Alert.alert("WFH", "User not found. Please login again.");
+      showDialog("DANGER", "WFH", "User not found. Please login again.");
       return;
     }
     if (startDate > endDate) {
-      Alert.alert("WFH", "End date must be after start date.");
+      showDialog("WARNING", "WFH", "End date must be after start date.");
       return;
     }
     setSubmitting(true);
@@ -84,13 +111,13 @@ const WfhForm = () => {
         endDate: endDate.toISOString().split("T")[0],
         reason: reason.trim(),
       });
-      Alert.alert("Success", "WFH request submitted.", [
-        { text: "OK", onPress: () => route.replace("/(tabs)/wfh") },
+      showDialog("SUCCESS", "Success", "WFH request submitted.", [
+        { text: "OK", onPress: () => { setDialogVisible(false); route.replace("/(tabs)/wfh"); } },
       ]);
     } catch (error: any) {
       const message =
         error?.response?.data?.message || "Failed to submit WFH request.";
-      Alert.alert("WFH", message);
+      showDialog("DANGER", "WFH", message);
     } finally {
       setSubmitting(false);
     }
@@ -180,6 +207,7 @@ const WfhForm = () => {
           </TouchableOpacity>
         </View>
       </View>
+      <CustomDialog isVisible={dialogVisible} type={dialogType as any} title={dialogTitle} message={dialogMessage} buttons={dialogButtons} onCancel={() => setDialogVisible(false)} />
     </View>
   );
 };

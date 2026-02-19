@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -9,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import CustomDialog from "./CustomDialog";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import { moderateScale, verticalScale } from "utils/metrics";
 import { getActivePolls, savePollResponse } from "../../api/api";
@@ -65,6 +65,33 @@ const MessageModal: React.FC<MessageModalProps> = ({ onClose }) => {
     [questionId: string]: string;
   }>({});
   const { user } = useAuthStore.getState();
+
+  const [dialogVisible, setDialogVisible] = useState<boolean>(false);
+  const [dialogType, setDialogType] = useState<string>("INFO");
+  const [dialogTitle, setDialogTitle] = useState<string>("");
+  const [dialogMessage, setDialogMessage] = useState<string>("");
+  const [dialogButtons, setDialogButtons] = useState<Array<{text: string, onPress: () => void, style?: 'default' | 'cancel' | 'destructive'}>>([]);
+
+  const showDialog = (
+    type: string,
+    title: string,
+    message: string,
+    buttons?: {text: string, onPress?: () => void, style?: 'default' | 'cancel' | 'destructive'}[]
+  ) => {
+    setDialogType(type);
+    setDialogTitle(title);
+    setDialogMessage(message);
+    if (buttons && buttons.length > 0) {
+      setDialogButtons(buttons.map(btn => ({
+        text: btn.text,
+        onPress: btn.onPress || (() => setDialogVisible(false)),
+        style: btn.style
+      })));
+    } else {
+      setDialogButtons([{ text: "OK", onPress: () => setDialogVisible(false) }]);
+    }
+    setDialogVisible(true);
+  };
 
   // Fetch poll (if any), decide if modal should show
   const fetchPolls = async () => {
@@ -138,7 +165,7 @@ const MessageModal: React.FC<MessageModalProps> = ({ onClose }) => {
       .every((q) => selectedOptions[q.id]);
 
     if (!requiredAnswered) {
-      Alert.alert("Incomplete", "Please answer all required questions.");
+      showDialog("WARNING", "Incomplete", "Please answer all required questions.");
       return;
     }
 
@@ -157,17 +184,18 @@ const MessageModal: React.FC<MessageModalProps> = ({ onClose }) => {
         }
       }
 
-      Alert.alert("Success", "Your response has been submitted successfully!", [
+      showDialog("SUCCESS", "Success", "Your response has been submitted successfully!", [
         {
           text: "OK",
           onPress: () => {
+            setDialogVisible(false);
             setIsVisible(false);
             onClose?.();
           },
         },
       ]);
     } catch {
-      Alert.alert("Error", "Failed to submit poll. Please try again.");
+      showDialog("DANGER", "Error", "Failed to submit poll. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -282,6 +310,7 @@ const MessageModal: React.FC<MessageModalProps> = ({ onClose }) => {
             </>
           ) : null}
         </View>
+        <CustomDialog isVisible={dialogVisible} type={dialogType as any} title={dialogTitle} message={dialogMessage} buttons={dialogButtons} onCancel={() => setDialogVisible(false)} />
       </View>
     </Modal>
   );

@@ -1,9 +1,9 @@
 import { Feather } from "@expo/vector-icons";
 import Header from "app/components/Header";
+import CustomDialog from "app/components/CustomDialog";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -27,6 +27,33 @@ const LeaveApproval = () => {
   const [items, setItems] = useState<any[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
+  const [dialogVisible, setDialogVisible] = useState<boolean>(false);
+  const [dialogType, setDialogType] = useState<string>("INFO");
+  const [dialogTitle, setDialogTitle] = useState<string>("");
+  const [dialogMessage, setDialogMessage] = useState<string>("");
+  const [dialogButtons, setDialogButtons] = useState<Array<{text: string, onPress: () => void, style?: 'default' | 'cancel' | 'destructive'}>>([]);
+
+  const showDialog = (
+    type: string,
+    title: string,
+    message: string,
+    buttons?: {text: string, onPress?: () => void, style?: 'default' | 'cancel' | 'destructive'}[]
+  ) => {
+    setDialogType(type);
+    setDialogTitle(title);
+    setDialogMessage(message);
+    if (buttons && buttons.length > 0) {
+      setDialogButtons(buttons.map(btn => ({
+        text: btn.text,
+        onPress: btn.onPress || (() => setDialogVisible(false)),
+        style: btn.style
+      })));
+    } else {
+      setDialogButtons([{ text: "OK", onPress: () => setDialogVisible(false) }]);
+    }
+    setDialogVisible(true);
+  };
+
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return "-";
     const d = new Date(dateStr);
@@ -45,7 +72,7 @@ const LeaveApproval = () => {
       const data = res.data ?? [];
       setItems(Array.isArray(data) ? data : []);
     } catch (error) {
-      Alert.alert("Leave Approvals", "Failed to load pending approvals.");
+      showDialog("DANGER", "Leave Approvals", "Failed to load pending approvals.");
     } finally {
       setLoading(false);
     }
@@ -63,7 +90,8 @@ const LeaveApproval = () => {
         approve: status === "APPROVED",
         remarks: "",
       });
-      Alert.alert(
+      showDialog(
+        "SUCCESS",
         "Leave Approvals",
         status === "APPROVED" ? "Leave approved." : "Leave rejected."
       );
@@ -71,7 +99,7 @@ const LeaveApproval = () => {
     } catch (error: any) {
       const message =
         error?.response?.data?.message || "Failed to update leave request.";
-      Alert.alert("Leave Approvals", message);
+      showDialog("DANGER", "Leave Approvals", message);
     } finally {
       setActionLoading(null);
     }
@@ -138,12 +166,13 @@ const LeaveApproval = () => {
                 <TouchableOpacity
                   style={[styles.actionButton, styles.rejectButton]}
                   onPress={() =>
-                    Alert.alert(
+                    showDialog(
+                      "WARNING",
                       "Reject Leave",
                       "Are you sure you want to reject this leave request?",
                       [
-                        { text: "Cancel", style: "cancel" },
-                        { text: "Reject", onPress: () => handleAction(item, "REJECTED") },
+                        { text: "Cancel", onPress: () => setDialogVisible(false), style: "cancel" },
+                        { text: "Reject", onPress: () => { setDialogVisible(false); handleAction(item, "REJECTED"); }, style: "destructive" },
                       ]
                     )
                   }
@@ -177,6 +206,7 @@ const LeaveApproval = () => {
           );
         })}
       </ScrollView>
+      <CustomDialog isVisible={dialogVisible} type={dialogType as any} title={dialogTitle} message={dialogMessage} buttons={dialogButtons} onCancel={() => setDialogVisible(false)} />
     </View>
   );
 };

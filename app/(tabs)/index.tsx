@@ -12,7 +12,6 @@ import { useFocusEffect, useNavigation, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   AppState,
   AppStateStatus,
   BackHandler,
@@ -77,7 +76,7 @@ const Index = () => {
   const [dialogType, setDialogType] = useState<string>("INFO");
   const [dialogTitle, setDialogTitle] = useState<string>("");
   const [dialogMessage, setDialogMessage] = useState<string>("");
-  const [dialogOnConfirm, setDialogOnConfirm] = useState<() => void>(() => () => {});
+  const [dialogButtons, setDialogButtons] = useState<Array<{text: string, onPress: () => void, style?: 'default' | 'cancel' | 'destructive'}>>([]);
   const [cachedWifi, setCachedWifi] = useState<any>(null);
   const [cachedLocation, setCachedLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [lastSubmission, setLastSubmission] = useState<number>(0);
@@ -98,12 +97,21 @@ const Index = () => {
     type: string,
     title: string,
     message: string,
-    onConfirm: () => void = () => setDialogVisible(false)
+    buttons?: {text: string, onPress?: () => void, style?: 'default' | 'cancel' | 'destructive'}[]
   ) => {
     setDialogType(type);
     setDialogTitle(title);
     setDialogMessage(message);
-    setDialogOnConfirm(() => onConfirm);
+    
+    if (buttons && buttons.length > 0) {
+      setDialogButtons(buttons.map(btn => ({
+        text: btn.text,
+        onPress: btn.onPress || (() => setDialogVisible(false)),
+        style: btn.style
+      })));
+    } else {
+      setDialogButtons([{ text: "OK", onPress: () => setDialogVisible(false) }]);
+    }
     setDialogVisible(true);
   };
 
@@ -271,14 +279,10 @@ const Index = () => {
       return false;
     } catch (error) {
       console.error("❌ Camera permission error:", error);
-      Alert.alert(
-        "Camera Permission Error",
-        "Unable to request camera permission. Please check app settings.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Open Settings", onPress: () => Linking.openSettings() },
-        ]
-      );
+      showDialog("DANGER", "Camera Permission Error", "Unable to request camera permission. Please check app settings.", [
+          { text: "Cancel", onPress: () => setDialogVisible(false), style: "cancel" },
+          { text: "Open Settings", onPress: () => { setDialogVisible(false); Linking.openSettings(); } },
+        ]);
       return false;
     }
   };
@@ -388,14 +392,10 @@ const Index = () => {
       if (permissionResult.status !== "granted") {
         setIsLocationValid(false);
         console.log("❌ Location permission not granted");
-        Alert.alert(
-          "Location Permission Required",
-          "Location permission is needed to mark attendance. Please enable location access in app settings.",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Open Settings", onPress: () => Linking.openSettings() },
-          ]
-        );
+        showDialog("DANGER", "Location Permission Required", "Location permission is needed to mark attendance. Please enable location access in app settings.", [
+            { text: "Cancel", onPress: () => setDialogVisible(false), style: "cancel" },
+            { text: "Open Settings", onPress: () => { setDialogVisible(false); Linking.openSettings(); } },
+          ]);
         return false;
       }
       console.log("✅ Location permission granted");
@@ -447,11 +447,7 @@ const Index = () => {
         await sleep(retryDelay);
         return checkLocation(retryCount + 1);
       }
-      Alert.alert(
-        "Location Error",
-        "Unable to fetch location. Please ensure location services are enabled and try again.",
-        [{ text: "OK", style: "cancel" }]
-      );
+      showDialog("DANGER", "Location Error", "Unable to fetch location. Please ensure location services are enabled and try again.");
       return false;
     } finally {
       setIsLoadingLocation(false);
@@ -873,15 +869,16 @@ const Index = () => {
       } catch (error) {
         console.error("=== takePicture process failed ===");
         console.error("Error message:", (error as Error).message);
-        showDialog(
-          "DANGER",
-          "Error",
-          "Failed to capture photo. Please try again.",
-          () => {
-            setIsSubmitting(false);
-            setShowCamera(true);
-          }
-        );
+        showDialog("DANGER", "Error", "Failed to capture photo. Please try again.", [
+          {
+            text: "OK",
+            onPress: () => {
+              setDialogVisible(false);
+              setIsSubmitting(false);
+              setShowCamera(true);
+            },
+          },
+        ]);
         setIsSubmitting(false);
         setCheckoutMode(false);
       }
@@ -896,10 +893,16 @@ const Index = () => {
 
   const handleSubmitImage = async (): Promise<void> => {
     if (!previewImage) {
-      showDialog("DANGER", "Error", "No image to submit", () => {
-        setIsSubmitting(false);
-        setPreviewImage(null);
-      });
+      showDialog("DANGER", "Error", "No image to submit", [
+        {
+          text: "OK",
+          onPress: () => {
+            setDialogVisible(false);
+            setIsSubmitting(false);
+            setPreviewImage(null);
+          },
+        },
+      ]);
       return;
     }
     const now = Date.now();
@@ -945,18 +948,30 @@ const Index = () => {
       setCachedWifi(wifiDetails);
       if (shouldValidateWifi && !wifiDetails.isValid) {
         console.error("WiFi validation failed");
-        showDialog("DANGER", "WiFi Required", "Please connect to the office WiFi network.", () => {
-          setIsSubmitting(false);
-          setPreviewImage(null);
-        });
+        showDialog("DANGER", "WiFi Required", "Please connect to the office WiFi network.", [
+          {
+            text: "OK",
+            onPress: () => {
+              setDialogVisible(false);
+              setIsSubmitting(false);
+              setPreviewImage(null);
+            },
+          },
+        ]);
         return;
       }
       if (shouldValidateGPS && !locationResult) {
         console.error("Location validation failed");
-        showDialog("DANGER", "Location Required", "Location permission is required.", () => {
-          setIsSubmitting(false);
-          setPreviewImage(null);
-        });
+        showDialog("DANGER", "Location Required", "Location permission is required.", [
+          {
+            text: "OK",
+            onPress: () => {
+              setDialogVisible(false);
+              setIsSubmitting(false);
+              setPreviewImage(null);
+            },
+          },
+        ]);
         return;
       }
       if (shouldValidateGPS && locationResult) {
@@ -1033,10 +1048,11 @@ const Index = () => {
         console.log("Step 6: Handling response...");
         const actionType = checkoutMode ? "Check-out" : "Check-in";
         if (response.data.status === "success") {
-          Alert.alert("Success", `${actionType} successful! Your attendance has been recorded.`, [
+          showDialog("SUCCESS", "Success", `${actionType} successful! Your attendance has been recorded.`, [
             {
               text: "OK",
               onPress: () => {
+                setDialogVisible(false);
                 setIsCheckedIn(checkoutMode ? false : true);
                 setPreviewImage(null);
                 setIsSubmitting(false);
@@ -1048,10 +1064,11 @@ const Index = () => {
         } else if (response.data.status === "anomaly") {
           const reasons = response.data.reasons || [];
           const reasonText = reasons.length > 0 ? reasons.join(", ") : "Unknown reason";
-          Alert.alert("Attendance Failed", `Attendance could not be recorded: ${reasonText}.`, [
+          showDialog("DANGER", "Attendance Failed", `Attendance could not be recorded: ${reasonText}.`, [
             {
               text: "OK",
               onPress: () => {
+                setDialogVisible(false);
                 setIsSubmitting(false);
                 setPreviewImage(null);
                 setCheckoutMode(false);
@@ -1060,13 +1077,15 @@ const Index = () => {
             },
           ]);
         } else {
-          Alert.alert(
+          showDialog(
+            "DANGER",
             "Attendance Failed",
             "Please ensure you are connected to the office Wi-Fi or within the office premises. Contact the administrator if the issue persists.",
             [
               {
                 text: "OK",
                 onPress: () => {
+                  setDialogVisible(false);
                   setIsSubmitting(false);
                   setPreviewImage(null);
                   setCheckoutMode(false);
@@ -1128,11 +1147,17 @@ const Index = () => {
       } else {
         errorMessage = "Failed to fetch current time. Please try again.";
       }
-      showDialog("DANGER", "Error", errorMessage, () => {
-        setIsSubmitting(false);
-        setPreviewImage(null);
-        setCheckoutMode(false);
-      });
+      showDialog("DANGER", "Error", errorMessage, [
+        {
+          text: "OK",
+          onPress: () => {
+            setDialogVisible(false);
+            setIsSubmitting(false);
+            setPreviewImage(null);
+            setCheckoutMode(false);
+          },
+        },
+      ]);
     } finally {
       console.log(`Total submission time (including error handling): ${Date.now() - startTotal}ms`);
       setIsSubmitting(false);
@@ -1233,6 +1258,14 @@ const Index = () => {
             </View>
           </View>
         )}
+        <CustomDialog
+          isVisible={dialogVisible}
+          type={dialogType as any}
+          title={dialogTitle}
+          message={dialogMessage}
+          buttons={dialogButtons}
+          onCancel={() => setDialogVisible(false)}
+        />
       </View>
     );
   }
@@ -1289,6 +1322,14 @@ const Index = () => {
             </View>
           </View>
         )}
+        <CustomDialog
+          isVisible={dialogVisible}
+          type={dialogType as any}
+          title={dialogTitle}
+          message={dialogMessage}
+          buttons={dialogButtons}
+          onCancel={() => setDialogVisible(false)}
+        />
       </View>
     );
   }
@@ -1296,12 +1337,15 @@ const Index = () => {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <MessageModal isVisible={showMessageModal} onClose={() => setShowMessageModal(false)} />
+      <TabHeader />
       <ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
         }
+        showsVerticalScrollIndicator={false}
       >
-        <TabHeader />
         <HomeCard
           currentDate={currentDate}
           formattedTime={formattedTime}
@@ -1390,10 +1434,10 @@ const Index = () => {
       </ScrollView>
       <CustomDialog
         isVisible={dialogVisible}
-        type={dialogType}
+        type={dialogType as any}
         title={dialogTitle}
         message={dialogMessage}
-        onConfirm={dialogOnConfirm}
+        buttons={dialogButtons}
         onCancel={() => setDialogVisible(false)}
       />
     </View>
@@ -1434,6 +1478,13 @@ const styles = StyleSheet.create({
     height: horizontalScale(60),
     borderRadius: horizontalScale(30),
     backgroundColor: "#fff",
+  },
+  scrollContainer: {
+    flex: 1,
+    marginTop: verticalScale(-90),
+  },
+  scrollContent: {
+    paddingBottom: verticalScale(20),
   },
   placeholderButton: { width: horizontalScale(80), height: verticalScale(50) },
   row: {

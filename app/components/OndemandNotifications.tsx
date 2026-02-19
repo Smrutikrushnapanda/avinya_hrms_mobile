@@ -4,7 +4,6 @@ import LottieView from 'lottie-react-native';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   Image,
   Modal,
@@ -18,6 +17,7 @@ import { Calendar } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getActiveNotices } from '../../api/api';
 import useAuthStore from '../../store/useUserStore';
+import CustomDialog from "./CustomDialog";
 
 const { width, height } = Dimensions.get('window');
 
@@ -42,6 +42,33 @@ const OndemandNotifications: React.FC<OndemandNotificationsProps> = ({ isVisible
   const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [shouldShowNotification, setShouldShowNotification] = useState(false);
+  const [dialogVisible, setDialogVisible] = useState<boolean>(false);
+  const [dialogType, setDialogType] = useState<string>("INFO");
+  const [dialogTitle, setDialogTitle] = useState<string>("");
+  const [dialogMessage, setDialogMessage] = useState<string>("");
+  const [dialogButtons, setDialogButtons] = useState<Array<{text: string, onPress: () => void, style?: 'default' | 'cancel' | 'destructive'}>>([]);
+
+  const showDialog = (
+    type: string,
+    title: string,
+    message: string,
+    buttons?: {text: string, onPress?: () => void, style?: 'default' | 'cancel' | 'destructive'}[]
+  ) => {
+    setDialogType(type);
+    setDialogTitle(title);
+    setDialogMessage(message);
+    if (buttons && buttons.length > 0) {
+      setDialogButtons(buttons.map(btn => ({
+        text: btn.text,
+        onPress: btn.onPress || (() => setDialogVisible(false)),
+        style: btn.style
+      })));
+    } else {
+      setDialogButtons([{ text: "OK", onPress: () => setDialogVisible(false) }]);
+    }
+    setDialogVisible(true);
+  };
+
   const { user } = useAuthStore.getState();
   const router = useRouter();
 
@@ -127,7 +154,7 @@ const OndemandNotifications: React.FC<OndemandNotificationsProps> = ({ isVisible
               onLoad={() => setImageLoading(false)}
               onError={() => {
                 setImageLoading(false);
-                Alert.alert('Error', 'Failed to load image');
+                showDialog("DANGER", "Error", "Failed to load image");
               }}
             />
           )}
@@ -205,6 +232,7 @@ const OndemandNotifications: React.FC<OndemandNotificationsProps> = ({ isVisible
               </View>
             ) : null}
           </SafeAreaView>
+          <CustomDialog isVisible={dialogVisible} type={dialogType as any} title={dialogTitle} message={dialogMessage} buttons={dialogButtons} onCancel={() => setDialogVisible(false)} />
         </View>
       </View>
     </Modal>

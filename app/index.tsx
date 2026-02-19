@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { View, ActivityIndicator } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
@@ -8,26 +8,29 @@ import WelcomeScreen from "./(screen)/welcome";
 export default function Index() {
   const router = useRouter();
   const { initializeAuth } = useAuthStore();
+  const routedRef = useRef(false);
 
   const [checkingStorage, setCheckingStorage] = useState(true);
   const [hasToken, setHasToken] = useState<string | null>(null);
 
   useEffect(() => {
+    if (routedRef.current) return;
+
     const checkLogin = async () => {
       try {
-        // ✅ First check Zustand store
         await initializeAuth();
         const authState = useAuthStore.getState();
         if (authState.isAuthenticated && authState.accessToken) {
-          router.replace("/(tabs)");
+          routedRef.current = true;
+          router.replace("/dashboard-wrapper");
           return;
         }
 
-        // ✅ Fallback: check AsyncStorage token (old method)
         const storedToken = await AsyncStorage.getItem("token");
         if (storedToken) {
           setHasToken(storedToken);
-          router.replace("/(tabs)");
+          routedRef.current = true;
+          router.replace("/dashboard-wrapper");
         }
       } catch (err) {
         console.log("Error checking login:", err);
@@ -37,9 +40,8 @@ export default function Index() {
     };
 
     checkLogin();
-  }, [initializeAuth, router]);
+  }, []);
 
-  // Show loader while checking
   if (checkingStorage) {
     return (
       <View
@@ -55,7 +57,6 @@ export default function Index() {
     );
   }
 
-  // Not logged in → show Welcome screen
   if (!hasToken) {
     return (
       <View style={{ flex: 1 }}>

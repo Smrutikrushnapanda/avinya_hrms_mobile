@@ -263,28 +263,6 @@ const TabLayout = () => {
             }}
           />
           <Tabs.Screen
-            name="services"
-            options={{
-              title: "Services",
-              tabBarStyle: { display: "none" },
-              tabBarIcon: () => null,
-              tabBarButton: (props) => (
-                <View style={styles.fabContainer}>
-                  <TouchableOpacity
-                    style={styles.fabButton}
-                    onPress={openBottomSheet}
-                    activeOpacity={0.8}
-                  >
-                    <View style={styles.fabCircle}>
-                      <FontAwesome5 name="th-large" size={22} color="#fff" />
-                    </View>
-                  </TouchableOpacity>
-                  <Text style={styles.fabLabel}>Services</Text>
-                </View>
-              ),
-            }}
-          />
-          <Tabs.Screen
             name="leave"
             options={{
               title: "Leave",
@@ -306,17 +284,11 @@ const TabLayout = () => {
             }}
           />
           <Tabs.Screen
-            name="wfh"
-            options={{
-              href: null,
-            }}
-          />
-          <Tabs.Screen
             name="TimeSlips"
             options={{
               title: "Time Slip",
               tabBarIcon: ({ color }) => (
-                <FontAwesome5 name="clock" size={20} color={color} /> // Changed to "clock" for clarity
+                <FontAwesome5 name="clock" size={20} color={color} />
               ),
               tabBarLabel: ({ focused }) => (
                 <Text
@@ -335,6 +307,39 @@ const TabLayout = () => {
               tabPress: (e) => {
                 router.push("/(tabs)/TimeSlips");
               },
+            }}
+          />
+          <Tabs.Screen
+            name="services"
+            options={{
+              title: "Services",
+              tabBarIcon: ({ color }) => (
+                <FontAwesome5 name="th-large" size={20} color={color} />
+              ),
+              tabBarLabel: ({ focused }) => (
+                <Text
+                  style={{
+                    color: focused ? "#026D94" : "#b9b9b9",
+                    fontSize: moderateScale(12),
+                    fontWeight: "500",
+                    marginBottom: verticalScale(0),
+                  }}
+                >
+                  Services
+                </Text>
+              ),
+            }}
+            listeners={{
+              tabPress: (e) => {
+                e.preventDefault();
+                openBottomSheet();
+              },
+            }}
+          />
+          <Tabs.Screen
+            name="wfh"
+            options={{
+              href: null,
             }}
           />
         </Tabs>
@@ -439,41 +444,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     lineHeight: moderateScale(14),
   },
-  fabContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: verticalScale(-35),
-  },
-  fabButton: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  fabCircle: {
-    width: horizontalScale(56),
-    height: horizontalScale(56),
-    backgroundColor: "#026D94",
-    borderRadius: horizontalScale(28),
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    borderColor: "#fff",
-    borderWidth: 3,
-  },
-  fabLabel: {
-    marginTop: verticalScale(4),
-    fontSize: moderateScale(11),
-    color: "#026D94",
-    fontWeight: "500",
-    textAlign: "center",
-  },
+
   disabledServiceItem: {
     backgroundColor: "#f8f9fa",
     borderColor: "#d0d0d0",

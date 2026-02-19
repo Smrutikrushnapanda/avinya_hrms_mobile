@@ -7,6 +7,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
@@ -22,7 +23,8 @@ import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { io, Socket } from "socket.io-client";
 
-const SOCKET_URL = "http://10.0.2.2:8080";
+const SOCKET_URL =
+  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinya-hrms-backend.onrender.com";
 
 const ChatScreen = () => {
   const colorScheme = useColorScheme() ?? "light";
@@ -237,144 +239,154 @@ const ChatScreen = () => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={20} color="#fff" />
-        </TouchableOpacity>
-        <View style={styles.avatarCircle}>
-          {avatar ? (
-            <Image source={{ uri: resolveUrl(avatar) }} style={styles.avatarImg} />
-          ) : (
-            <Text style={styles.avatarText}>{title.charAt(0)}</Text>
-          )}
-        </View>
-        <View style={styles.headerText}>
-          <Text style={styles.title}>{title}</Text>
-          <View style={styles.statusRow}>
-            <View
-              style={[
-                styles.presenceDot,
-                isOnline ? styles.presenceDotOnline : styles.presenceDotOffline,
-              ]}
-            />
-            <Text style={styles.subtitle}>
-              {isOnline ? "Online" : "Offline"}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      <FlatList
-        ref={listRef}
-        data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={renderMessage}
-        contentContainerStyle={styles.chatContent}
-        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Feather name="message-circle" size={40} color="#cbd5e1" />
-            <Text style={styles.emptyText}>No messages yet</Text>
-            <Text style={styles.emptySubtext}>
-              Say hello to start the conversation.
-            </Text>
-          </View>
-        }
-      />
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-      >
-        {showAttachMenu && (
-          <TouchableOpacity
-            style={styles.attachOverlay}
-            activeOpacity={1}
-            onPress={() => setShowAttachMenu(false)}
-          >
-            <View style={styles.attachMenu}>
-              <TouchableOpacity
-                style={styles.attachAction}
-                onPress={() => {
-                  setShowAttachMenu(false);
-                  pickImage();
-                }}
-              >
-                <View style={[styles.attachFab, styles.attachFabPhoto]}>
-                  <Feather name="image" size={18} color="#fff" />
-                </View>
-                <Text style={styles.attachLabel}>Photo</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.attachAction}
-                onPress={() => {
-                  setShowAttachMenu(false);
-                  pickDocument();
-                }}
-              >
-                <View style={[styles.attachFab, styles.attachFabFile]}>
-                  <Feather name="file-text" size={18} color="#fff" />
-                </View>
-                <Text style={styles.attachLabel}>File</Text>
-              </TouchableOpacity>
-            </View>
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+    >
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={20} color="#fff" />
           </TouchableOpacity>
-        )}
-        {attachments.length > 0 && (
-          <View style={styles.attachPreview}>
-            {attachments.map((a: any, i: number) => (
-              <View key={`${a.uri}-${i}`} style={styles.previewItem}>
-                <Text style={styles.previewText}>
-                  {a.type === "image" ? "Photo" : a.name || "File"}
+          <View style={styles.avatarCircle}>
+            {avatar ? (
+              <Image source={{ uri: resolveUrl(avatar) }} style={styles.avatarImg} />
+            ) : (
+              <Text style={styles.avatarText}>{title.charAt(0)}</Text>
+            )}
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>{title}</Text>
+            <View style={styles.statusRow}>
+              <View
+                style={[
+                  styles.presenceDot,
+                  isOnline ? styles.presenceDotOnline : styles.presenceDotOffline,
+                ]}
+              />
+              <Text style={styles.subtitle}>
+                {isOnline ? "Online" : "Offline"}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.body}>
+          <FlatList
+            ref={listRef}
+            data={messages}
+            keyExtractor={(item) => item.id}
+            renderItem={renderMessage}
+            contentContainerStyle={styles.chatContent}
+            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Feather name="message-circle" size={40} color="#cbd5e1" />
+                <Text style={styles.emptyText}>No messages yet</Text>
+                <Text style={styles.emptySubtext}>
+                  Say hello to start the conversation.
                 </Text>
+              </View>
+            }
+          />
+
+          {showAttachMenu && (
+            <TouchableOpacity
+              style={styles.attachOverlay}
+              activeOpacity={1}
+              onPress={() => setShowAttachMenu(false)}
+            >
+              <View style={styles.attachMenu}>
                 <TouchableOpacity
-                  onPress={() =>
-                    setAttachments((prev) =>
-                      prev.filter((_, idx) => idx !== i)
-                    )
-                  }
+                  style={styles.attachAction}
+                  onPress={() => {
+                    setShowAttachMenu(false);
+                    pickImage();
+                  }}
                 >
-                  <Feather name="x" size={16} color="#ef4444" />
+                  <View style={[styles.attachFab, styles.attachFabPhoto]}>
+                    <Feather name="image" size={18} color="#fff" />
+                  </View>
+                  <Text style={styles.attachLabel}>Photo</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.attachAction}
+                  onPress={() => {
+                    setShowAttachMenu(false);
+                    pickDocument();
+                  }}
+                >
+                  <View style={[styles.attachFab, styles.attachFabFile]}>
+                    <Feather name="file-text" size={18} color="#fff" />
+                  </View>
+                  <Text style={styles.attachLabel}>File</Text>
                 </TouchableOpacity>
               </View>
-            ))}
-          </View>
-        )}
-        <View style={styles.inputBar}>
-          <TouchableOpacity onPress={openAttach} style={styles.iconBtn}>
-            <Feather
-              name={showAttachMenu ? "x" : "paperclip"}
-              size={20}
-              color="#334155"
+            </TouchableOpacity>
+          )}
+          {attachments.length > 0 && (
+            <View style={styles.attachPreview}>
+              {attachments.map((a: any, i: number) => (
+                <View key={`${a.uri}-${i}`} style={styles.previewItem}>
+                  <Text style={styles.previewText}>
+                    {a.type === "image" ? "Photo" : a.name || "File"}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() =>
+                      setAttachments((prev) =>
+                        prev.filter((_, idx) => idx !== i)
+                      )
+                    }
+                  >
+                    <Feather name="x" size={16} color="#ef4444" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+          <View style={styles.inputBar}>
+            <TouchableOpacity onPress={openAttach} style={styles.iconBtn}>
+              <Feather
+                name={showAttachMenu ? "x" : "paperclip"}
+                size={20}
+                color="#334155"
+              />
+            </TouchableOpacity>
+            <TextInput
+              value={text}
+              onChangeText={setText}
+              placeholder="Type a message"
+              placeholderTextColor="#94A3B8"
+              style={styles.input}
             />
-          </TouchableOpacity>
-          <TextInput
-            value={text}
-            onChangeText={setText}
-            placeholder="Type a message"
-            placeholderTextColor="#94A3B8"
-            style={styles.input}
-          />
-          <TouchableOpacity
-            onPress={handleSend}
-            style={[
-              styles.sendBtn,
-              (!text.trim() && attachments.length === 0) && styles.sendBtnDisabled,
-              sending && { opacity: 0.6 },
-            ]}
-            disabled={sending || (!text.trim() && attachments.length === 0)}
-          >
-            <Feather name="send" size={18} color="#fff" />
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleSend}
+              style={[
+                styles.sendBtn,
+                (!text.trim() && attachments.length === 0) && styles.sendBtnDisabled,
+                sending && { opacity: 0.6 },
+              ]}
+              disabled={sending || (!text.trim() && attachments.length === 0)}
+            >
+              <Feather name="send" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
         </View>
-      </KeyboardAvoidingView>
-    </View>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  body: {
     flex: 1,
   },
   header: {

@@ -1,11 +1,10 @@
 import { Feather } from "@expo/vector-icons";
-import Header from "app/components/Header";
+import AdminTabHeader from "app/components/AdminTabHeader";
 import LeaveSkeleton from "app/Loaders/LeaveSkeleton";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
-  Alert,
   ScrollView,
   RefreshControl,
   StyleSheet,
@@ -14,6 +13,7 @@ import {
   View,
   useColorScheme,
 } from "react-native";
+import CustomDialog from "../components/CustomDialog";
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import { getLeaveBalance, getLeaveRequests, getPendingLeaves } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
@@ -31,6 +31,33 @@ const Leave = () => {
   const [leaveBalances, setLeaveBalances] = useState<any[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
+
+  const [dialogVisible, setDialogVisible] = useState<boolean>(false);
+  const [dialogType, setDialogType] = useState<string>("INFO");
+  const [dialogTitle, setDialogTitle] = useState<string>("");
+  const [dialogMessage, setDialogMessage] = useState<string>("");
+  const [dialogButtons, setDialogButtons] = useState<Array<{text: string, onPress: () => void, style?: 'default' | 'cancel' | 'destructive'}>>([]);
+
+  const showDialog = (
+    type: string,
+    title: string,
+    message: string,
+    buttons?: {text: string, onPress?: () => void, style?: 'default' | 'cancel' | 'destructive'}[]
+  ) => {
+    setDialogType(type);
+    setDialogTitle(title);
+    setDialogMessage(message);
+    if (buttons && buttons.length > 0) {
+      setDialogButtons(buttons.map(btn => ({
+        text: btn.text,
+        onPress: btn.onPress || (() => setDialogVisible(false)),
+        style: btn.style
+      })));
+    } else {
+      setDialogButtons([{ text: "OK", onPress: () => setDialogVisible(false) }]);
+    }
+    setDialogVisible(true);
+  };
 
   // Animation values
   const slideValue = useRef(new Animated.Value(0)).current;
@@ -81,10 +108,7 @@ const Leave = () => {
         setIsApprover(false);
       }
     } catch (error) {
-      Alert.alert(
-        "Leave Load Failed",
-        "Unable to load leave data. Please try again."
-      );
+      showDialog("DANGER", "Leave Load Failed", "Unable to load leave data. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -239,7 +263,7 @@ const Leave = () => {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Main Content */}
       <View style={styles.contentWrapper}>
-        <Header title="Leave" />
+        <AdminTabHeader title="Leave" />
 
         {/* Summary Card */}
         <View style={styles.cardWrapper}>
@@ -469,6 +493,7 @@ const Leave = () => {
           </TouchableOpacity>
         </Animated.View>
       </View>
+      <CustomDialog isVisible={dialogVisible} type={dialogType as any} title={dialogTitle} message={dialogMessage} buttons={dialogButtons} onCancel={() => setDialogVisible(false)} />
     </View>
   );
 };

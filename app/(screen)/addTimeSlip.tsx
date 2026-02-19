@@ -4,7 +4,6 @@ import Header from "app/components/Header";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   StyleSheet,
   Text,
@@ -13,6 +12,7 @@ import {
   useColorScheme,
   View,
 } from "react-native";
+import CustomDialog from "../components/CustomDialog";
 import { useRouter } from "expo-router";
 import { getEmployeeProfile, timeSlips } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
@@ -47,6 +47,33 @@ const AddTimeSlip = () => {
   const [loading, setLoading] = useState(false);
   const [employeeId, setEmployeeId] = useState(null);
 
+  const [dialogVisible, setDialogVisible] = useState<boolean>(false);
+  const [dialogType, setDialogType] = useState<string>("INFO");
+  const [dialogTitle, setDialogTitle] = useState<string>("");
+  const [dialogMessage, setDialogMessage] = useState<string>("");
+  const [dialogButtons, setDialogButtons] = useState<Array<{text: string, onPress: () => void, style?: 'default' | 'cancel' | 'destructive'}>>([]);
+
+  const showDialog = (
+    type: string,
+    title: string,
+    message: string,
+    buttons?: {text: string, onPress?: () => void, style?: 'default' | 'cancel' | 'destructive'}[]
+  ) => {
+    setDialogType(type);
+    setDialogTitle(title);
+    setDialogMessage(message);
+    if (buttons && buttons.length > 0) {
+      setDialogButtons(buttons.map(btn => ({
+        text: btn.text,
+        onPress: btn.onPress || (() => setDialogVisible(false)),
+        style: btn.style
+      })));
+    } else {
+      setDialogButtons([{ text: "OK", onPress: () => setDialogVisible(false) }]);
+    }
+    setDialogVisible(true);
+  };
+
   useEffect(() => {
     const fetchEmployeeId = async () => {
       if (user?.userId) {
@@ -59,7 +86,8 @@ const AddTimeSlip = () => {
             "❌ Error fetching employee profile:",
             err.response?.data || err.message
           );
-          Alert.alert(
+          showDialog(
+            "DANGER",
             "Error",
             "Failed to fetch employee profile. Please try again."
           );
@@ -123,7 +151,8 @@ const AddTimeSlip = () => {
 
   const handleSubmit = async () => {
     if (!selectedOption) {
-      Alert.alert(
+      showDialog(
+        "DANGER",
         "Error",
         "Please select an option (Check In, Check Out, or Both)"
       );
@@ -131,24 +160,25 @@ const AddTimeSlip = () => {
     }
 
     if (!reason.trim()) {
-      Alert.alert("Error", "Please provide a reason");
+      showDialog("DANGER", "Error", "Please provide a reason");
       return;
     }
 
     // Validate word count (redundant due to real-time limit, but kept for safety)
     const wordCount = reason.trim().split(/\s+/).length;
     if (wordCount > 50) {
-      Alert.alert("Error", "Reason cannot exceed 50 words.");
+      showDialog("DANGER", "Error", "Reason cannot exceed 50 words.");
       return;
     }
 
     if (!user?.userId || !user?.organizationId) {
-      Alert.alert("Error", "User information is missing. Please log in again.");
+      showDialog("DANGER", "Error", "User information is missing. Please log in again.");
       return;
     }
 
     if (!employeeId) {
-      Alert.alert(
+      showDialog(
+        "DANGER",
         "Error",
         "Employee information is missing. Please try again."
       );
@@ -162,7 +192,7 @@ const AddTimeSlip = () => {
         (selectedOption !== "checkout" && checkInTime > now) ||
         (selectedOption !== "checkin" && checkOutTime > now)
       ) {
-        Alert.alert("Error", "Cannot select future times for today.");
+        showDialog("DANGER", "Error", "Cannot select future times for today.");
         return;
       }
     }
@@ -198,10 +228,10 @@ const AddTimeSlip = () => {
       const res = await timeSlips(payload);
       console.log("API Response:", res.data);
 
-      Alert.alert("Success", "Time slip submitted successfully!", [
+      showDialog("SUCCESS", "Success", "Time slip submitted successfully!", [
         {
           text: "OK",
-          onPress: () => router.push("/(tabs)/TimeSlips"),
+          onPress: () => { setDialogVisible(false); router.push("/(tabs)/TimeSlips"); },
         },
       ]);
 
@@ -215,7 +245,8 @@ const AddTimeSlip = () => {
         "Error submitting time slip:",
         error.response?.data || error.message
       );
-      Alert.alert(
+      showDialog(
+        "DANGER",
         "Error",
         error.response?.data?.message ||
           "Failed to submit time slip. Please try again."
@@ -432,6 +463,7 @@ const AddTimeSlip = () => {
           </View>
         </View>
       </View>
+      <CustomDialog isVisible={dialogVisible} type={dialogType as any} title={dialogTitle} message={dialogMessage} buttons={dialogButtons} onCancel={() => setDialogVisible(false)} />
     </View>
   );
 };

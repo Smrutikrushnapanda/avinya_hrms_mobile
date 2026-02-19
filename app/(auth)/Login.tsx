@@ -4,7 +4,6 @@ import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -17,6 +16,7 @@ import {
   View,
   useColorScheme,
 } from "react-native";
+import CustomDialog from "../components/CustomDialog";
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import { login } from "../../api/api"; // Ensure path is correct
 import useAuthStore from "../../store/useUserStore"; // Import the Zustand store
@@ -30,6 +30,33 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [userIdError, setUserIdError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+
+  const [dialogVisible, setDialogVisible] = useState<boolean>(false);
+  const [dialogType, setDialogType] = useState<string>("INFO");
+  const [dialogTitle, setDialogTitle] = useState<string>("");
+  const [dialogMessage, setDialogMessage] = useState<string>("");
+  const [dialogButtons, setDialogButtons] = useState<Array<{text: string, onPress: () => void, style?: 'default' | 'cancel' | 'destructive'}>>([]);
+
+  const showDialog = (
+    type: string,
+    title: string,
+    message: string,
+    buttons?: {text: string, onPress?: () => void, style?: 'default' | 'cancel' | 'destructive'}[]
+  ) => {
+    setDialogType(type);
+    setDialogTitle(title);
+    setDialogMessage(message);
+    if (buttons && buttons.length > 0) {
+      setDialogButtons(buttons.map(btn => ({
+        text: btn.text,
+        onPress: btn.onPress || (() => setDialogVisible(false)),
+        style: btn.style
+      })));
+    } else {
+      setDialogButtons([{ text: "OK", onPress: () => setDialogVisible(false) }]);
+    }
+    setDialogVisible(true);
+  };
 
   const colorScheme = useColorScheme() ?? "light";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
@@ -110,10 +137,7 @@ const Login = () => {
       router.replace("/(tabs)");
     } catch (error) {
       console.error("Login Error:", error);
-      Alert.alert(
-        "Login Failed",
-        error?.response?.data?.message || "Invalid credentials"
-      );
+      showDialog("DANGER", "Login Failed", error?.response?.data?.message || "Invalid credentials");
     } finally {
       setIsLoading(false);
     }
@@ -286,6 +310,7 @@ const Login = () => {
           </View>
         </ScrollView>
       </TouchableWithoutFeedback>
+      <CustomDialog isVisible={dialogVisible} type={dialogType as any} title={dialogTitle} message={dialogMessage} buttons={dialogButtons} onCancel={() => setDialogVisible(false)} />
     </KeyboardAvoidingView>
   );
 };

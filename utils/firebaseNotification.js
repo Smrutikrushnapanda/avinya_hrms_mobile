@@ -1,4 +1,3 @@
-import { Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApp } from "@react-native-firebase/app";
 import {
@@ -40,14 +39,15 @@ export async function getFCMToken() {
 }
 
 // 🔹 Foreground + background listeners
-export function registerNotificationListeners() {
+export function registerNotificationListeners(onNotification) {
   // Foreground
   const unsubscribeOnMessage = onMessage(messaging, async (remoteMessage) => {
     console.log("📩 Foreground message:", remoteMessage);
-    Alert.alert(
-      remoteMessage.notification?.title || "New Notification",
-      remoteMessage.notification?.body || "You got a message!"
-    );
+    const title = remoteMessage.notification?.title || "New Notification";
+    const body = remoteMessage.notification?.body || "You got a message!";
+    if (onNotification) {
+      onNotification(title, body);
+    }
   });
 
   // App opened from background

@@ -3,7 +3,6 @@ import Header from "app/components/Header";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  Alert,
   Dimensions,
   FlatList,
   RefreshControl,
@@ -24,6 +23,7 @@ import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import { getHolidaysByFinancialYear } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
 import { darkTheme, lightTheme } from "../constants/colors";
+import CustomDialog from "../components/CustomDialog";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -174,6 +174,32 @@ const ViewAllHolidays = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState("Upcoming");
   const [filteredHolidays, setFilteredHolidays] = useState([]);
+  const [dialogVisible, setDialogVisible] = useState<boolean>(false);
+  const [dialogType, setDialogType] = useState<string>("INFO");
+  const [dialogTitle, setDialogTitle] = useState<string>("");
+  const [dialogMessage, setDialogMessage] = useState<string>("");
+  const [dialogButtons, setDialogButtons] = useState<Array<{text: string, onPress: () => void, style?: 'default' | 'cancel' | 'destructive'}>>([]);
+
+  const showDialog = (
+    type: string,
+    title: string,
+    message: string,
+    buttons?: {text: string, onPress?: () => void, style?: 'default' | 'cancel' | 'destructive'}[]
+  ) => {
+    setDialogType(type);
+    setDialogTitle(title);
+    setDialogMessage(message);
+    if (buttons && buttons.length > 0) {
+      setDialogButtons(buttons.map(btn => ({
+        text: btn.text,
+        onPress: btn.onPress || (() => setDialogVisible(false)),
+        style: btn.style
+      })));
+    } else {
+      setDialogButtons([{ text: "OK", onPress: () => setDialogVisible(false) }]);
+    }
+    setDialogVisible(true);
+  };
 
   const router = useRouter();
   const { user } = useAuthStore();
@@ -203,7 +229,7 @@ const ViewAllHolidays = () => {
       }
     } catch (error) {
       console.error("Failed to fetch holidays:", error);
-      Alert.alert("Error", "Failed to fetch holidays. Please try again.");
+      showDialog("DANGER", "Error", "Failed to fetch holidays. Please try again.");
     } finally {
       setLoading(false);
       if (isRefresh) setRefreshing(false);
@@ -478,6 +504,7 @@ const ViewAllHolidays = () => {
           />
         )}
       </View>
+      <CustomDialog isVisible={dialogVisible} type={dialogType as any} title={dialogTitle} message={dialogMessage} buttons={dialogButtons} onCancel={() => setDialogVisible(false)} />
     </View>
   );
 };

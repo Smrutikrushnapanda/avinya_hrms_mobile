@@ -3,7 +3,6 @@ import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   FlatList,
-  Modal,
   RefreshControl,
   StyleSheet,
   Text,
@@ -16,10 +15,11 @@ import {
 import { darkTheme, lightTheme } from "../../constants/colors";
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import useAuthStore from "../../../store/useUserStore";
-import { createDirectConversation, getChatConversations, getEmployees } from "../../../api/api";
+import { getChatConversations, getEmployees } from "../../../api/api";
 import { io, Socket } from "socket.io-client";
 
-const SOCKET_URL = "http://10.0.2.2:8080";
+const SOCKET_URL =
+  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinya-hrms-backend.onrender.com";
 
 const ChatList = () => {
   const colorScheme = useColorScheme() ?? "light";
@@ -31,7 +31,6 @@ const ChatList = () => {
   const [conversations, setConversations] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [showNewChat, setShowNewChat] = useState(false);
   const [employees, setEmployees] = useState<any[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
 
@@ -172,18 +171,6 @@ const ChatList = () => {
     });
   };
 
-  const startChatWith = async (emp: any) => {
-    try {
-      const res = await createDirectConversation(emp.userId);
-      const conv = res.data;
-      setShowNewChat(false);
-      const name = `${emp.firstName || ""} ${emp.lastName || ""}`.trim();
-      openConversation(conv.id, name, emp.photoUrl || "");
-    } catch {
-      // ignore
-    }
-  };
-
   const resolveUrl = (url?: string) => {
     if (!url) return "";
     if (url.startsWith("http")) return url;
@@ -278,7 +265,7 @@ const ChatList = () => {
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Chats</Text>
         </View>
-        <TouchableOpacity onPress={() => setShowNewChat(true)}>
+        <TouchableOpacity onPress={() => router.push("/(screen)/chat/new")}>
           <Feather name="edit-2" size={20} color="#fff" />
         </TouchableOpacity>
       </View>
@@ -330,7 +317,7 @@ const ChatList = () => {
               <Text style={styles.emptyText}>No conversations yet</Text>
               <TouchableOpacity
                 style={styles.emptyCta}
-                onPress={() => setShowNewChat(true)}
+                onPress={() => router.push("/(screen)/chat/new")}
               >
                 <Text style={styles.emptyCtaText}>Start a chat</Text>
               </TouchableOpacity>
@@ -339,43 +326,6 @@ const ChatList = () => {
         }
       />
 
-      <Modal visible={showNewChat} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>New Chat</Text>
-              <TouchableOpacity onPress={() => setShowNewChat(false)}>
-                <Ionicons name="close" size={22} color="#1f2937" />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={employees}
-              keyExtractor={(item) => item.userId}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.employeeRow}
-                  onPress={() => startChatWith(item)}
-                >
-                  <View style={styles.avatarCircleSm}>
-                    <Text style={styles.avatarText}>
-                      {item.firstName?.charAt(0)?.toUpperCase() || "U"}
-                    </Text>
-                  </View>
-                  <View>
-                    <Text style={styles.employeeName}>
-                      {item.firstName} {item.lastName}
-                    </Text>
-                    <Text style={styles.employeeSub}>
-                      {item.designation?.name || item.designationName || "Employee"}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-              ItemSeparatorComponent={() => <View style={styles.divider} />}
-            />
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };
@@ -587,47 +537,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "700",
     fontSize: moderateScale(12),
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(15,23,42,0.4)",
-    justifyContent: "flex-end",
-  },
-  modalSheet: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: moderateScale(16),
-    borderTopRightRadius: moderateScale(16),
-    maxHeight: "70%",
-    padding: moderateScale(16),
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: verticalScale(10),
-  },
-  modalTitle: {
-    fontSize: moderateScale(16),
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  employeeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: verticalScale(10),
-  },
-  employeeName: {
-    fontSize: moderateScale(13),
-    fontWeight: "600",
-    color: "#0F172A",
-  },
-  employeeSub: {
-    fontSize: moderateScale(11),
-    color: "#94A3B8",
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#F1F5F9",
   },
 });
 

@@ -1,9 +1,9 @@
 import { AntDesign, FontAwesome, Ionicons } from "@expo/vector-icons";
-import Header from "app/components/Header";
+import AdminTabHeader from "app/components/AdminTabHeader";
+import CustomDialog from "app/components/CustomDialog";
 import React, { useCallback, useEffect, useState, useRef } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Dimensions,
   Image,
@@ -28,6 +28,7 @@ import {
 } from "utils/metrics";
 import { darkTheme, lightTheme } from "../constants/colors";
 import AttendanceSkeleton from "../Loaders/AttendanceSkeleton";
+import { useResponsive } from "../utils/useResponsive";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -40,6 +41,7 @@ const Attendance = () => {
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
   const { user } = useAuthStore();
   const currentDate = new Date();
+  const { isMobile, isWeb } = useResponsive();
 
   const [attendanceData, setAttendanceData] = useState<any[]>([]);
   const [displayedItems, setDisplayedItems] = useState<any[]>([]);
@@ -61,6 +63,33 @@ const Attendance = () => {
   const [selectedYear, setSelectedYear] = useState<number>(
     currentDate.getFullYear()
   );
+
+  const [dialogVisible, setDialogVisible] = useState<boolean>(false);
+  const [dialogType, setDialogType] = useState<string>("INFO");
+  const [dialogTitle, setDialogTitle] = useState<string>("");
+  const [dialogMessage, setDialogMessage] = useState<string>("");
+  const [dialogButtons, setDialogButtons] = useState<Array<{text: string, onPress: () => void, style?: 'default' | 'cancel' | 'destructive'}>>([]);
+
+  const showDialog = (
+    type: string,
+    title: string,
+    message: string,
+    buttons?: {text: string, onPress?: () => void, style?: 'default' | 'cancel' | 'destructive'}[]
+  ) => {
+    setDialogType(type);
+    setDialogTitle(title);
+    setDialogMessage(message);
+    if (buttons && buttons.length > 0) {
+      setDialogButtons(buttons.map(btn => ({
+        text: btn.text,
+        onPress: btn.onPress || (() => setDialogVisible(false)),
+        style: btn.style
+      })));
+    } else {
+      setDialogButtons([{ text: "OK", onPress: () => setDialogVisible(false) }]);
+    }
+    setDialogVisible(true);
+  };
 
   const ITEMS_PER_PAGE = 5;
 
@@ -289,7 +318,7 @@ const Attendance = () => {
         attendanceRecords = response.data.data;
       } else {
         console.error("API response format unexpected:", response.data);
-        Alert.alert("Error", "Unexpected API response format");
+        showDialog("DANGER", "Error", "Unexpected API response format");
         return;
       }
 
@@ -399,7 +428,7 @@ const Attendance = () => {
       setSelectedPhotoUrl(photoUrl);
       setShowPhotoModal(true);
     } else {
-      Alert.alert("No Photo", "No photo available for this time.");
+      showDialog("INFO", "No Photo", "No photo available for this time.");
     }
   };
 
@@ -441,7 +470,7 @@ const Attendance = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header title="Attendance" />
+      <AdminTabHeader title="Attendance" />
       <View style={styles.cardWrapper}>
         <View style={[styles.card, { backgroundColor: colors.white }]}>
           <View style={styles.triangle} />
@@ -720,6 +749,7 @@ const Attendance = () => {
         </View>
       </View>
       <PhotoModal />
+      <CustomDialog isVisible={dialogVisible} type={dialogType as any} title={dialogTitle} message={dialogMessage} buttons={dialogButtons} onCancel={() => setDialogVisible(false)} />
     </View>
   );
 };
