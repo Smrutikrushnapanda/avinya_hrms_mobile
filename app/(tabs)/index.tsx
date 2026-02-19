@@ -28,6 +28,7 @@ import {
 } from "react-native";
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import { getCurrentTime, getOrganization, logAttendance, todayLogs } from "../../api/api";
+import { CACHE_TTL, withCache, invalidateCache } from "utils/apiCache";
 import useAuthStore from "../../store/useUserStore";
 import CustomDialog from "../components/CustomDialog";
 import HomeCard from "../components/HomeCard";
@@ -118,7 +119,12 @@ const Index = () => {
   const fetchOrgValidationRules = async () => {
     if (!orgId) return;
     try {
-      const response = await getOrganization(orgId);
+      // Cache org settings for 15 min – they almost never change mid-session
+      const response = await withCache(
+        `org_settings_${orgId}`,
+        CACHE_TTL.ORG_SETTINGS,
+        () => getOrganization(orgId),
+      );
       const org = response.data || {};
       const enableWifiValidation =
         typeof org.enableWifiValidation === "boolean" ? org.enableWifiValidation : true;
@@ -287,13 +293,19 @@ const Index = () => {
     }
   };
 
-  const fetchAttendanceLogs = async (): Promise<void> => {
+  const fetchAttendanceLogs = async (forceRefresh = false): Promise<void> => {
     try {
       if (!isAuthenticated || !accessToken || !orgId || !userId) {
         return;
       }
       console.log("📊 Fetching attendance logs for orgId:", orgId, "userId:", userId);
-      const response = await todayLogs(orgId, userId);
+      // Cache today's logs for 2 min – gets invalidated immediately after a punch
+      const response = await withCache(
+        `today_logs_${orgId}_${userId}`,
+        CACHE_TTL.TODAY_LOGS,
+        () => todayLogs(orgId, userId),
+        forceRefresh,
+      );
       if (response.data && response.data.logs) {
         setAttendanceLogs(response.data.logs);
         setPunchInTime(response.data.punchInTime);
@@ -1057,7 +1069,9 @@ const Index = () => {
                 setPreviewImage(null);
                 setIsSubmitting(false);
                 setCheckoutMode(false);
-                fetchAttendanceLogs();
+                // Invalidate cached logs so the next fetch gets fresh punch data
+                invalidateCache(`today_logs_${orgId}_${userId}`);
+                fetchAttendanceLogs(true);
               },
             },
           ]);

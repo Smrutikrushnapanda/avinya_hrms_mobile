@@ -18,6 +18,7 @@ import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import { getLeaveBalance, getLeaveRequests, getPendingLeaves } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
 import { darkTheme, lightTheme } from "../constants/colors";
+import { CACHE_TTL, withCache, invalidateCacheByPrefix, getCached } from "utils/apiCache";
 
 const Leave = () => {
   const colorScheme = useColorScheme() ?? "light";
@@ -75,17 +76,25 @@ const Leave = () => {
     return d.toLocaleDateString();
   };
 
-  const fetchLeaveData = useCallback(async () => {
+  const fetchLeaveData = useCallback(async (forceRefresh = false) => {
     if (!userId) {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    // Only show the full-page skeleton when there is no fresh cache (first load or expired).
+    // On subsequent tab-focus hits the cache returns instantly, so we skip the skeleton.
+    const hasFreshCache =
+      !forceRefresh &&
+      getCached(`leave_balance_${userId}`, CACHE_TTL.LEAVE) !== null &&
+      getCached(`leave_requests_${userId}`, CACHE_TTL.LEAVE) !== null &&
+      getCached(`leave_pending_${userId}`, CACHE_TTL.LEAVE) !== null;
+    if (!hasFreshCache) setLoading(true);
     try {
+      if (forceRefresh) invalidateCacheByPrefix(`leave_${userId}`);
       const [balanceRes, requestsRes, pendingRes] = await Promise.allSettled([
-        getLeaveBalance(userId),
-        getLeaveRequests(userId),
-        getPendingLeaves(userId),
+        withCache(`leave_balance_${userId}`, CACHE_TTL.LEAVE, () => getLeaveBalance(userId), forceRefresh),
+        withCache(`leave_requests_${userId}`, CACHE_TTL.LEAVE, () => getLeaveRequests(userId), forceRefresh),
+        withCache(`leave_pending_${userId}`, CACHE_TTL.LEAVE, () => getPendingLeaves(userId), forceRefresh),
       ]);
 
       if (balanceRes.status === "fulfilled") {
@@ -117,7 +126,7 @@ const Leave = () => {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await fetchLeaveData();
+      await fetchLeaveData(true); // force-bypass cache on manual refresh
     } finally {
       setRefreshing(false);
     }
@@ -174,10 +183,6 @@ const Leave = () => {
     bounceAnimation.start();
     return () => bounceAnimation.stop(); // Cleanup on unmount
   }, [bounceValue]);
-
-  useEffect(() => {
-    fetchLeaveData();
-  }, [fetchLeaveData]);
 
   useFocusEffect(
     useCallback(() => {

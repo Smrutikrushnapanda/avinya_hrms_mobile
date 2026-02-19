@@ -21,6 +21,7 @@ import {
 } from "react-native";
 import { monthlyAttendance } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
+import { CACHE_TTL, withCache, getCached } from "utils/apiCache";
 import {
   horizontalScale,
   moderateScale,
@@ -294,19 +295,22 @@ const Attendance = () => {
     }, 500);
   }, [attendanceData, currentPage, loadingMore, hasMoreData]);
 
-  const fetchAttendanceData = async () => {
+  const fetchAttendanceData = async (forceRefresh = false) => {
     if (!user?.userId || !user?.organizationId) {
       setLoading(false);
       return;
     }
 
+    const cacheKey = `monthly_attendance_${user.userId}_${selectedMonth}_${selectedYear}`;
+
     try {
-      setLoading(true);
-      const response = await monthlyAttendance(
-        user.userId,
-        selectedMonth,
-        selectedYear,
-        user.organizationId
+      const isCached = !forceRefresh && getCached(cacheKey, CACHE_TTL.MONTHLY_ATTENDANCE) !== null;
+      if (!isCached) setLoading(true);
+      const response = await withCache(
+        cacheKey,
+        CACHE_TTL.MONTHLY_ATTENDANCE,
+        () => monthlyAttendance(user.userId, selectedMonth, selectedYear, user.organizationId),
+        forceRefresh,
       );
 
       let attendanceRecords = [];
@@ -388,7 +392,7 @@ const Attendance = () => {
     setCurrentPage(0);
     setDisplayedItems([]);
     setHasMoreData(true);
-    await fetchAttendanceData();
+    await fetchAttendanceData(true); // force-bypass cache on manual refresh
     setRefreshing(false);
   };
 

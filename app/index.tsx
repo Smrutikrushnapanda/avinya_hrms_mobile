@@ -22,7 +22,7 @@ export default function Index() {
         const authState = useAuthStore.getState();
         if (authState.isAuthenticated && authState.accessToken) {
           routedRef.current = true;
-          router.replace("/dashboard-wrapper");
+          router.replace("/(tabs)");
           return;
         }
 
@@ -30,7 +30,7 @@ export default function Index() {
         if (storedToken) {
           setHasToken(storedToken);
           routedRef.current = true;
-          router.replace("/dashboard-wrapper");
+          router.replace("/(tabs)");
         }
       } catch (err) {
         console.log("Error checking login:", err);

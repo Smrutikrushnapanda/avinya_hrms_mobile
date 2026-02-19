@@ -21,6 +21,7 @@ import {
 } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
 import TimeSlipsSkeleton from "../Loaders/TimeSlipsSkeleton";
+import { CACHE_TTL, withCache, invalidateCacheByPrefix, getCached } from "utils/apiCache";
 
 // TypeScript Interfaces
 interface TimestampEntry {
@@ -139,7 +140,7 @@ export default function TimeSlips() {
   }, [user?.userId, isAuthenticated]);
 
   // Fetch employee profile and timeslips
-  const fetchTimeslips = async () => {
+  const fetchTimeslips = async (forceRefresh = false) => {
     // Early return if user is not authenticated or userId is missing
     if (!isAuthenticated || !user?.userId) {
       console.log("⚠️ User not authenticated or userId missing:", { isAuthenticated, userId: user?.userId });
@@ -150,15 +151,23 @@ export default function TimeSlips() {
     }
 
     try {
-      setLoading(true);
-      setRefreshing(true);
-      setError(null); // Clear any previous errors
+      // Only show the full-page skeleton when there's no fresh cache (first load).
+      // On subsequent visits the cache returns instantly — no skeleton flash.
+      const isCached =
+        !forceRefresh &&
+        getCached(`emp_profile_${user.userId}`, CACHE_TTL.AUTH_PROFILE) !== null;
+      if (!isCached) setLoading(true);
+      // setRefreshing is controlled by onRefresh, not the fetch itself
+      setError(null);
 
       console.log("🔄 Fetching timeslips for userId:", user.userId);
 
-      // Fetch employee profile to get employee ID
-      const response: EmployeeProfileResponse = await getEmployeeProfile(
-        user.userId
+      // Fetch employee profile to get employee ID (cached – rarely changes)
+      const response: EmployeeProfileResponse = await withCache(
+        `emp_profile_${user.userId}`,
+        CACHE_TTL.AUTH_PROFILE,
+        () => getEmployeeProfile(user.userId as string),
+        forceRefresh,
       );
       const empId = response.data.id;
       setEmployeeId(empId);
@@ -169,8 +178,13 @@ export default function TimeSlips() {
 
       console.log("✅ Employee ID found:", empId);
 
-      // Fetch timeslips using employee ID
-      const timeslipResponse: TimeslipResponse = await getTimeslipsByEmployee(empId, 10, 1);
+      // Fetch timeslips using employee ID (cached)
+      const timeslipResponse: TimeslipResponse = await withCache(
+        `timeslips_${empId}`,
+        CACHE_TTL.TIMESLIPS,
+        () => getTimeslipsByEmployee(empId, 10, 1),
+        forceRefresh,
+      );
       const timeslips = timeslipResponse.data.data;
 
       const formattedEntries: TimestampEntry[] = timeslips.map((slip) => {
@@ -310,11 +324,11 @@ export default function TimeSlips() {
     router.push(route);
   };
 
-  // Handle pull-to-refresh
+  // Handle pull-to-refresh – always bypass cache
   const onRefresh = () => {
     if (isAuthenticated && user?.userId) {
       setRefreshing(true);
-      fetchTimeslips();
+      fetchTimeslips(true);
     }
   };
 
