@@ -63,6 +63,7 @@ export default function RootLayout() {
       socket.on("chat:message", (payload: any) => {
         if (!payload?.conversationId) return;
         const senderId = payload?.message?.senderId;
+        if (senderId && senderId === user?.userId) return;
         const sender = senderId ? employeeMap.get(senderId) : null;
         const title = sender
           ? `${sender.firstName || ""} ${sender.lastName || ""}`.trim()

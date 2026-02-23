@@ -52,7 +52,7 @@ const Message = () => {
   const [notifications, setNotifications] = useState<MessageItem[]>([]);
 
   // Filter tabs similar to Leave component
-  const filters = ["All", "Unread", "Today", "Priority"];
+  const filters = ["All", "Unread", "Today"];
 
   // Filter messages based on selected filter and search
   const filteredData = useMemo(() => {
@@ -73,9 +73,6 @@ const Message = () => {
             d.getDate() === today.getDate()
           );
         });
-        break;
-      case "Priority":
-        filtered = notifications.filter((item) => item.priority === "high");
         break;
       default:
         filtered = notifications;
@@ -108,7 +105,6 @@ const Message = () => {
       All: notifications.length,
       Unread: notifications.filter((n) => n.isNew).length,
       Today: notifications.filter((n) => isToday(n.sentAtMs)).length,
-      Priority: notifications.filter((n) => n.priority === "high").length,
     };
   }, [notifications]);
 

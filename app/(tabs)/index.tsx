@@ -340,16 +340,8 @@ const Index = () => {
     }
     setIsLoadingWifi(true);
     try {
-      const cachedWifiData = await AsyncStorage.getItem('cachedWifi');
-      if (cachedWifiData) {
-        const parsedWifi = JSON.parse(cachedWifiData);
-        if (parsedWifi.isValid) {
-          setWifiInfo(parsedWifi);
-          setIsWifiValid(true);
-          setCachedWifi(parsedWifi);
-          return true;
-        }
-      }
+      // Always do a real network check — never trust stale AsyncStorage cache for WiFi validity.
+      // Mobile data / no-WiFi scenarios would otherwise show "Connected" from a previous WiFi session.
       const wifiDetails = await getWifiDetails(showAlerts);
       console.log("WiFi Check - Connected to:", wifiDetails.ssid);
       setWifiInfo(wifiDetails);

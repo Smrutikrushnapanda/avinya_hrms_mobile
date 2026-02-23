@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import CustomDialog from "../components/CustomDialog";
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
-import { getLeaveBalance, getLeaveRequests, getPendingLeaves } from "../../api/api";
+import { getLeaveBalance, getLeaveRequests, getPendingLeaves, getAuthProfile } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
 import { darkTheme, lightTheme } from "../constants/colors";
 import { CACHE_TTL, withCache, invalidateCacheByPrefix, getCached } from "utils/apiCache";
@@ -111,10 +111,8 @@ const Leave = () => {
         const data = pendingRes.value?.data ?? [];
         const list = Array.isArray(data) ? data : [];
         setPendingCount(list.length);
-        setIsApprover(list.length > 0);
       } else {
         setPendingCount(0);
-        setIsApprover(false);
       }
     } catch (error) {
       showDialog("DANGER", "Leave Load Failed", "Unable to load leave data. Please try again.");
@@ -183,6 +181,21 @@ const Leave = () => {
     bounceAnimation.start();
     return () => bounceAnimation.stop(); // Cleanup on unmount
   }, [bounceValue]);
+
+  // Fetch isApprover flag from auth profile (same approach as TimeSlips)
+  useEffect(() => {
+    const fetchAuthProfile = async () => {
+      if (!userId) return;
+      try {
+        const response = await getAuthProfile();
+        setIsApprover(Boolean(response.data?.isApprover));
+      } catch (err) {
+        console.error("Error fetching auth profile:", err);
+        setIsApprover(false);
+      }
+    };
+    fetchAuthProfile();
+  }, [userId]);
 
   useFocusEffect(
     useCallback(() => {

@@ -2,6 +2,8 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import {
+  AppState,
+  AppStateStatus,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -39,7 +41,14 @@ const ChatList = () => {
     try {
       const res = await getChatConversations();
       const data = res.data ?? [];
-      setConversations(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setConversations(
+        list.sort(
+          (a: any, b: any) =>
+            new Date(b.updatedAt || b.lastMessage?.createdAt || 0).getTime() -
+            new Date(a.updatedAt || a.lastMessage?.createdAt || 0).getTime()
+        )
+      );
     } finally {
       setLoading(false);
     }
@@ -72,43 +81,82 @@ const ChatList = () => {
   React.useEffect(() => {
     if (!accessToken) return;
     let socket: Socket | null = null;
-    try {
-      socket = io(SOCKET_URL, {
-        auth: { token: accessToken },
-        transports: ["websocket"],
-      });
 
-      socket.on("chat:presence", (payload: any) => {
-        if (!payload?.userId) return;
-        setOnlineUsers((prev) => {
-          const next = new Set(prev);
-          if (payload.status === "online") next.add(payload.userId);
-          if (payload.status === "offline") next.delete(payload.userId);
-          return next;
+    const connect = () => {
+      if (socket?.connected) return;
+      try {
+        socket = io(SOCKET_URL, {
+          auth: { token: accessToken },
+          transports: ["websocket"],
         });
-      });
 
-      socket.on("chat:message", (payload: any) => {
-        if (!payload?.conversationId) return;
-        setConversations((prev) => {
-          const idx = prev.findIndex((c) => c.id === payload.conversationId);
-          if (idx === -1) return prev;
-          const updated = [...prev];
-          updated[idx] = {
-            ...updated[idx],
-            lastMessage: payload.message,
-            unreadCount: (updated[idx].unreadCount || 0) + 1,
-          };
-          return [updated[idx], ...updated.filter((_, i) => i !== idx)];
+        socket.on("chat:presence", (payload: any) => {
+          if (!payload?.userId) return;
+          setOnlineUsers((prev) => {
+            const next = new Set(prev);
+            if (payload.status === "online") next.add(payload.userId);
+            if (payload.status === "offline") next.delete(payload.userId);
+            return next;
+          });
         });
-      });
-    } catch {
-      // ignore socket errors
-    }
-    return () => {
-      if (socket) socket.disconnect();
+
+        socket.on("chat:message", (payload: any) => {
+          if (!payload?.conversationId) return;
+          setConversations((prev) => {
+            const idx = prev.findIndex((c) => c.id === payload.conversationId);
+            if (idx === -1) {
+              // conversation may be new for this user; reload list once
+              loadConversations();
+              return prev;
+            }
+            const updated = [...prev];
+            const isOwnMessage = payload?.message?.senderId === user?.userId;
+            updated[idx] = {
+              ...updated[idx],
+              lastMessage: payload.message,
+              updatedAt: payload?.message?.createdAt || new Date().toISOString(),
+              unreadCount: isOwnMessage
+                ? 0
+                : (updated[idx].unreadCount || 0) + 1,
+            };
+            return [updated[idx], ...updated.filter((_, i) => i !== idx)].sort(
+              (a: any, b: any) =>
+                new Date(b.updatedAt || b.lastMessage?.createdAt || 0).getTime() -
+                new Date(a.updatedAt || a.lastMessage?.createdAt || 0).getTime()
+            );
+          });
+        });
+      } catch {
+        // ignore socket errors
+      }
     };
-  }, [accessToken]);
+
+    const disconnect = () => {
+      if (socket) {
+        socket.disconnect();
+        socket = null;
+        setOnlineUsers(new Set());
+      }
+    };
+
+    connect();
+
+    const subscription = AppState.addEventListener(
+      "change",
+      (nextState: AppStateStatus) => {
+        if (nextState === "active") {
+          connect();
+        } else if (nextState === "background" || nextState === "inactive") {
+          disconnect();
+        }
+      }
+    );
+
+    return () => {
+      subscription.remove();
+      disconnect();
+    };
+  }, [accessToken, loadConversations, user?.userId]);
 
   const employeeMap = useMemo(() => {
     const map = new Map<string, any>();

@@ -1,9 +1,10 @@
 import { FontAwesome5 } from "@expo/vector-icons";
 import { Tabs, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
+  Easing,
   Modal,
   PanResponder,
   PermissionsAndroid,
@@ -20,10 +21,221 @@ import CustomDialog from "../components/CustomDialog";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 
+// ─── Animated Tab Icon ────────────────────────────────────────────────────────
+const AnimatedTabIcon = ({
+  name,
+  color,
+  focused,
+}: {
+  name: string;
+  color: string;
+  focused: boolean;
+}) => {
+  const scale = useRef(new Animated.Value(1)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (focused) {
+      Animated.sequence([
+        Animated.parallel([
+          Animated.spring(scale, {
+            toValue: 1.25,
+            useNativeDriver: true,
+            tension: 200,
+            friction: 6,
+          }),
+          Animated.timing(translateY, {
+            toValue: -3,
+            duration: 200,
+            useNativeDriver: true,
+            easing: Easing.out(Easing.cubic),
+          }),
+        ]),
+        Animated.parallel([
+          Animated.spring(scale, {
+            toValue: 1.1,
+            useNativeDriver: true,
+            tension: 200,
+            friction: 8,
+          }),
+        ]),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.spring(scale, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 200,
+          friction: 8,
+        }),
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.cubic),
+        }),
+      ]).start();
+    }
+  }, [focused]);
+
+  return (
+    <Animated.View style={{ transform: [{ scale }, { translateY }] }}>
+      <FontAwesome5 name={name} size={20} color={color} solid={focused} />
+    </Animated.View>
+  );
+};
+
+// ─── Animated Service Item ────────────────────────────────────────────────────
+const ServiceItemButton = ({
+  item,
+  index,
+  onPress,
+  sheetVisible,
+}: {
+  item: any;
+  index: number;
+  onPress: () => void;
+  sheetVisible: boolean;
+}) => {
+  const scale = useRef(new Animated.Value(0.6)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(20)).current;
+  const pressScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (sheetVisible) {
+      Animated.parallel([
+        Animated.timing(scale, {
+          toValue: 1,
+          duration: 300,
+          delay: index * 50,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.back(1.5)),
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 250,
+          delay: index * 50,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: 300,
+          delay: index * 50,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.cubic),
+        }),
+      ]).start();
+    } else {
+      scale.setValue(0.6);
+      opacity.setValue(0);
+      translateY.setValue(20);
+    }
+  }, [sheetVisible]);
+
+  const handlePressIn = () => {
+    Animated.spring(pressScale, {
+      toValue: 0.92,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(pressScale, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
+  return (
+    <Animated.View
+      style={{
+        width: "23%",
+        opacity,
+        transform: [{ scale: pressScale }, { translateY }],
+        marginBottom: verticalScale(15),
+      }}
+    >
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={[
+          styles.serviceItem,
+          item.disabled && styles.disabledServiceItem,
+        ]}
+      >
+        <View style={styles.serviceIconContainer}>
+          <FontAwesome5
+            name={item.icon}
+            size={24}
+            color={item.disabled ? "#555" : item.color}
+            solid
+          />
+        </View>
+        <Text
+          style={[
+            styles.serviceItemText,
+            item.disabled && { color: "#555" },
+          ]}
+        >
+          {item.name}
+        </Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
+// ─── Center Tab Button (FAB style from old UI) ────────────────────────────────
+const CenterTabButton = ({ onPress }: { onPress: () => void }) => {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const handlePress = () => {
+    Animated.sequence([
+      Animated.spring(scale, {
+        toValue: 0.9,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 200,
+        friction: 8,
+      }),
+    ]).start();
+    onPress();
+  };
+
+  return (
+    <View style={styles.fabContainer}>
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={handlePress}
+        style={styles.fabButton}
+      >
+        <Animated.View style={[styles.fabCircle, { transform: [{ scale }] }]}>
+          <FontAwesome5 name="th-large" size={22} color="#fff" />
+        </Animated.View>
+      </TouchableOpacity>
+      <Text style={styles.fabLabel}>Services</Text>
+    </View>
+  );
+};
+
+// ─── Main Tab Layout ──────────────────────────────────────────────────────────
 const TabLayout = () => {
   const router = useRouter();
   const [isBottomSheetVisible, setIsBottomSheetVisible] = useState(false);
-  const [translateY] = useState(new Animated.Value(SCREEN_HEIGHT));
+  const [sheetAnimVisible, setSheetAnimVisible] = useState(false);
+  const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
   const [dialogVisible, setDialogVisible] = useState(false);
   const [dialogTitle, setDialogTitle] = useState("");
   const [dialogMessage, setDialogMessage] = useState("");
@@ -31,40 +243,69 @@ const TabLayout = () => {
 
   const openBottomSheet = () => {
     setIsBottomSheetVisible(true);
-    Animated.timing(translateY, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
+    setSheetAnimVisible(true);
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 380,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.exp),
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
   };
 
   const closeBottomSheet = () => {
-    Animated.timing(translateY, {
-      toValue: SCREEN_HEIGHT,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
+    setSheetAnimVisible(false);
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: SCREEN_HEIGHT,
+        duration: 320,
+        useNativeDriver: true,
+        easing: Easing.in(Easing.exp),
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 280,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
       setIsBottomSheetVisible(false);
     });
   };
 
   const panResponder = PanResponder.create({
-    onMoveShouldSetPanResponder: (evt, gestureState) => {
-      return gestureState.dy > 0 && gestureState.vy > 0;
-    },
-    onPanResponderMove: (evt, gestureState) => {
+    onMoveShouldSetPanResponder: (_, gestureState) =>
+      gestureState.dy > 5 && gestureState.vy > 0,
+    onPanResponderMove: (_, gestureState) => {
       if (gestureState.dy > 0) {
         translateY.setValue(gestureState.dy);
+        backdropOpacity.setValue(
+          Math.max(0, 1 - gestureState.dy / (SCREEN_HEIGHT * 0.4))
+        );
       }
     },
-    onPanResponderRelease: (evt, gestureState) => {
+    onPanResponderRelease: (_, gestureState) => {
       if (gestureState.dy > 150 || gestureState.vy > 0.5) {
         closeBottomSheet();
       } else {
-        Animated.spring(translateY, {
-          toValue: 0,
-          useNativeDriver: true,
-        }).start();
+        Animated.parallel([
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 200,
+            friction: 20,
+          }),
+          Animated.timing(backdropOpacity, {
+            toValue: 1,
+            duration: 150,
+            useNativeDriver: true,
+          }),
+        ]).start();
       }
     },
   });
@@ -82,54 +323,77 @@ const TabLayout = () => {
       }
       const ssid = await NetworkInfo.getSSID();
       const bssid = await NetworkInfo.getBSSID();
-      console.log("SSID:", ssid);
-      console.log("BSSID:", bssid);
+      console.log("SSID:", ssid, "BSSID:", bssid);
     };
     checkWifiInfo();
   }, []);
 
   const serviceItems = [
-    {
-      icon: "calendar-check",
-      name: "Attend",
-      color: "#026D94",
-      disabled: false,
-    },
-    { icon: "calendar-alt", name: "Leave", color: "#026D94", disabled: false },
-    {
-      icon: "comment-alt", // FontAwesome5 message icon
-      name: "Messages",
-      color: "#026D94",
-      disabled: false,
-      type: "FontAwesome5", // optional, if you're mixing icon sets
-    },
-    { icon: "credit-card", name: "Payslips", color: "#026D94", disabled: false },
-    { icon: "home", name: "WFH", color: "#026D94", disabled: false },
-    { icon: "question-circle", name: "Help", color: "#999", disabled: true },
+    { icon: "calendar-check", name: "Attend",   color: "#026D94", disabled: false },
+    { icon: "calendar-alt",   name: "Leave",    color: "#026D94", disabled: false },
+    { icon: "comment-alt",    name: "Messages", color: "#026D94", disabled: false },
+    { icon: "credit-card",    name: "Payslips", color: "#026D94", disabled: false },
+    { icon: "home",           name: "WFH",      color: "#026D94", disabled: false },
+    { icon: "question-circle",name: "Help",     color: "#aaa",    disabled: true  },
   ];
+
+  const handleServicePress = (item: any) => {
+    if (item.disabled) {
+      setDialogTitle("Coming Soon");
+      setDialogMessage(`${item.name} service is under development.`);
+      setDialogType("INFO");
+      setDialogVisible(true);
+      return;
+    }
+    closeBottomSheet();
+    const routes: Record<string, string> = {
+      Attend:   "/(tabs)/attendance",
+      Leave:    "/(tabs)/leave",
+      WFH:      "/(tabs)/wfh",
+      Payslips: "/(screen)/payslips",
+      Messages: "/(screen)/chat",
+      Holidays: "/(screen)/ViewAllHolidays",
+    };
+    if (routes[item.name]) {
+      setTimeout(() => router.push(routes[item.name] as any), 350);
+    }
+  };
 
   return (
     <>
       <View style={styles.container}>
+        {/* ── Bottom Sheet Modal ── */}
         <Modal
           visible={isBottomSheetVisible}
-          transparent={true}
-          animationType="fade"
+          transparent
+          animationType="none"
           onRequestClose={closeBottomSheet}
+          statusBarTranslucent
         >
           <View style={styles.modalOverlay}>
-            <TouchableOpacity
-              style={styles.backdrop}
-              activeOpacity={1}
-              onPress={closeBottomSheet}
-            />
+            <Animated.View
+              style={[styles.backdrop, { opacity: backdropOpacity }]}
+            >
+              <TouchableOpacity
+                style={{ flex: 1 }}
+                activeOpacity={1}
+                onPress={closeBottomSheet}
+              />
+            </Animated.View>
+
             <Animated.View
               style={[styles.bottomSheet, { transform: [{ translateY }] }]}
               {...panResponder.panHandlers}
             >
+              {/* Drag handle */}
               <View style={styles.dragHandle} />
-              <ScrollView style={styles.sheetScrollView}>
+
+              <ScrollView
+                style={styles.sheetScrollView}
+                showsVerticalScrollIndicator={false}
+              >
                 <View style={styles.sheetContent}>
+                  {/* Header */}
                   <View style={styles.sheetHeader}>
                     <FontAwesome5 name="th-large" size={24} color="#026D94" />
                     <Text style={styles.sheetTitle}>Services</Text>
@@ -137,65 +401,17 @@ const TabLayout = () => {
                       Select a service from the options below
                     </Text>
                   </View>
+
+                  {/* Services grid */}
                   <View style={styles.servicesGrid}>
                     {serviceItems.map((item, index) => (
-                      <TouchableOpacity
+                      <ServiceItemButton
                         key={index}
-                        style={[
-                          styles.serviceItem,
-                          item.disabled && styles.disabledServiceItem,
-                        ]}
-                        onPress={() => {
-                          if (item.disabled) {
-                            setDialogTitle("Coming Soon");
-                            setDialogMessage(
-                              `${item.name} service is under development.`
-                            );
-                            setDialogType("INFO");
-                            setDialogVisible(true);
-                            return;
-                          }
-                          closeBottomSheet();
-                          switch (item.name) {
-                            case "Attend":
-                              router.push("/(tabs)/attendance");
-                              break;
-                            case "Leave":
-                              router.push("/(tabs)/leave");
-                              break;
-                            case "WFH":
-                              router.push("/(tabs)/wfh");
-                              break;
-                            case "Payslips":
-                              router.push("/(screen)/payslips");
-                              break;
-                            case "Messages":
-                              router.push("/(screen)/chat");
-                              break;
-                            case "Holidays":
-                              router.push("/(screen)/ViewAllHolidays");
-                              break;
-                            default:
-                              console.log(`${item.name} pressed`);
-                          }
-                        }}
-                      >
-                        <View style={styles.serviceIconContainer}>
-                          <FontAwesome5
-                            name={item.icon}
-                            size={24}
-                            color={item.disabled ? "#555" : item.color}
-                          />
-                        </View>
-                        <Text
-                          style={[
-                            styles.serviceItemText,
-                            item.disabled && { color: "#555" },
-                          ]}
-                        >
-                          {item.name}
-                        </Text>
-                      </TouchableOpacity>
+                        item={item}
+                        index={index}
+                        sheetVisible={sheetAnimVisible}
+                        onPress={() => handleServicePress(item)}
+                      />
                     ))}
                   </View>
                 </View>
@@ -204,19 +420,30 @@ const TabLayout = () => {
           </View>
         </Modal>
 
+        {/* ── Tab Navigator ── */}
         <Tabs
           screenOptions={{
             headerShown: false,
             tabBarShowLabel: true,
             tabBarActiveTintColor: "#026D94",
             tabBarInactiveTintColor: "#b9b9b9",
+            tabBarStyle: {
+              height: verticalScale(64),
+              paddingBottom: verticalScale(6),
+              paddingTop: verticalScale(6),
+              borderTopWidth: 1,
+              borderTopColor: "#E5E7EB",
+              backgroundColor: "#ffffff",
+              shadowColor: "#000",
+              shadowOpacity: 0.08,
+              shadowRadius: 12,
+              shadowOffset: { width: 0, height: -4 },
+              elevation: 12,
+            },
             tabBarLabelStyle: {
               fontSize: moderateScale(12),
               fontWeight: "500",
               marginBottom: verticalScale(0),
-            },
-            tabBarIconStyle: {
-              marginBottom: verticalScale(2),
             },
           }}
         >
@@ -224,18 +451,11 @@ const TabLayout = () => {
             name="index"
             options={{
               title: "Home",
-              tabBarIcon: ({ color }) => (
-                <FontAwesome5 name="home" size={20} color={color} />
+              tabBarIcon: ({ color, focused }) => (
+                <AnimatedTabIcon name="home" color={color} focused={focused} />
               ),
               tabBarLabel: ({ focused }) => (
-                <Text
-                  style={{
-                    color: focused ? "#026D94" : "#b9b9b9",
-                    fontSize: moderateScale(12),
-                    fontWeight: "500",
-                    marginBottom: verticalScale(0),
-                  }}
-                >
+                <Text style={{ color: focused ? "#026D94" : "#b9b9b9", fontSize: moderateScale(12), fontWeight: "500" }}>
                   Home
                 </Text>
               ),
@@ -245,88 +465,22 @@ const TabLayout = () => {
             name="attendance"
             options={{
               title: "Attendance",
-              tabBarIcon: ({ color }) => (
-                <FontAwesome5 name="calendar-check" size={20} color={color} />
+              tabBarIcon: ({ color, focused }) => (
+                <AnimatedTabIcon name="calendar-check" color={color} focused={focused} />
               ),
               tabBarLabel: ({ focused }) => (
-                <Text
-                  style={{
-                    color: focused ? "#026D94" : "#b9b9b9",
-                    fontSize: moderateScale(12),
-                    fontWeight: "500",
-                    marginBottom: verticalScale(0),
-                  }}
-                >
+                <Text style={{ color: focused ? "#026D94" : "#b9b9b9", fontSize: moderateScale(12), fontWeight: "500" }}>
                   Attendance
                 </Text>
               ),
             }}
           />
           <Tabs.Screen
-            name="leave"
-            options={{
-              title: "Leave",
-              tabBarIcon: ({ color }) => (
-                <FontAwesome5 name="upload" size={20} color={color} />
-              ),
-              tabBarLabel: ({ focused }) => (
-                <Text
-                  style={{
-                    color: focused ? "#026D94" : "#b9b9b9",
-                    fontSize: moderateScale(12),
-                    fontWeight: "500",
-                    marginBottom: verticalScale(0),
-                  }}
-                >
-                  Leave
-                </Text>
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="TimeSlips"
-            options={{
-              title: "Time Slip",
-              tabBarIcon: ({ color }) => (
-                <FontAwesome5 name="clock" size={20} color={color} />
-              ),
-              tabBarLabel: ({ focused }) => (
-                <Text
-                  style={{
-                    color: focused ? "#026D94" : "#b9b9b9",
-                    fontSize: moderateScale(12),
-                    fontWeight: "500",
-                    marginBottom: verticalScale(0),
-                  }}
-                >
-                  Time Slip
-                </Text>
-              ),
-            }}
-            listeners={{
-              tabPress: (e) => {
-                router.push("/(tabs)/TimeSlips");
-              },
-            }}
-          />
-          <Tabs.Screen
             name="services"
             options={{
               title: "Services",
-              tabBarIcon: ({ color }) => (
-                <FontAwesome5 name="th-large" size={20} color={color} />
-              ),
-              tabBarLabel: ({ focused }) => (
-                <Text
-                  style={{
-                    color: focused ? "#026D94" : "#b9b9b9",
-                    fontSize: moderateScale(12),
-                    fontWeight: "500",
-                    marginBottom: verticalScale(0),
-                  }}
-                >
-                  Services
-                </Text>
+              tabBarButton: () => (
+                <CenterTabButton onPress={openBottomSheet} />
               ),
             }}
             listeners={{
@@ -337,10 +491,41 @@ const TabLayout = () => {
             }}
           />
           <Tabs.Screen
-            name="wfh"
+            name="leave"
             options={{
-              href: null,
+              title: "Leave",
+              tabBarIcon: ({ color, focused }) => (
+                <AnimatedTabIcon name="calendar-minus" color={color} focused={focused} />
+              ),
+              tabBarLabel: ({ focused }) => (
+                <Text style={{ color: focused ? "#026D94" : "#b9b9b9", fontSize: moderateScale(12), fontWeight: "500" }}>
+                  Leave
+                </Text>
+              ),
             }}
+          />
+          <Tabs.Screen
+            name="TimeSlips"
+            options={{
+              title: "Time Slip",
+              tabBarIcon: ({ color, focused }) => (
+                <AnimatedTabIcon name="clock" color={color} focused={focused} />
+              ),
+              tabBarLabel: ({ focused }) => (
+                <Text style={{ color: focused ? "#026D94" : "#b9b9b9", fontSize: moderateScale(12), fontWeight: "500" }}>
+                  Time Slip
+                </Text>
+              ),
+            }}
+            listeners={{
+              tabPress: () => {
+                router.push("/(tabs)/TimeSlips");
+              },
+            }}
+          />
+          <Tabs.Screen
+            name="wfh"
+            options={{ href: null }}
           />
         </Tabs>
 
@@ -361,13 +546,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#ffffff",
   },
+
+  // ── Modal / Sheet ──
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "flex-end",
   },
   backdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
   },
   bottomSheet: {
     backgroundColor: "#ffffff",
@@ -376,13 +563,12 @@ const styles = StyleSheet.create({
     height: "45%",
     elevation: 10,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: -2,
-    },
+    shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 10,
   },
+
+  // ── Drag handle ──
   dragHandle: {
     width: horizontalScale(40),
     height: verticalScale(4),
@@ -391,6 +577,8 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginVertical: verticalScale(10),
   },
+
+  // ── Sheet content ──
   sheetScrollView: {
     flex: 1,
   },
@@ -416,6 +604,8 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "center",
   },
+
+  // ── Services Grid ──
   servicesGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -423,16 +613,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: horizontalScale(5),
   },
   serviceItem: {
-    width: "23%",
+    width: "100%",
     aspectRatio: 1,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#f8f9fa",
     borderRadius: moderateScale(12),
-    marginBottom: verticalScale(15),
     borderWidth: 1,
     borderColor: "#e9ecef",
     padding: moderateScale(10),
+  },
+  disabledServiceItem: {
+    backgroundColor: "#f8f9fa",
+    borderColor: "#d0d0d0",
   },
   serviceIconContainer: {
     marginBottom: verticalScale(8),
@@ -445,9 +638,38 @@ const styles = StyleSheet.create({
     lineHeight: moderateScale(14),
   },
 
-  disabledServiceItem: {
-    backgroundColor: "#f8f9fa",
-    borderColor: "#d0d0d0",
+  // ── FAB Center Button ──
+  fabContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: verticalScale(-35),
+  },
+  fabButton: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fabCircle: {
+    width: horizontalScale(56),
+    height: horizontalScale(56),
+    backgroundColor: "#026D94",
+    borderRadius: horizontalScale(28),
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    borderColor: "#fff",
+    borderWidth: 3,
+  },
+  fabLabel: {
+    marginTop: verticalScale(4),
+    fontSize: moderateScale(11),
+    color: "#026D94",
+    fontWeight: "500",
+    textAlign: "center",
   },
 });
 

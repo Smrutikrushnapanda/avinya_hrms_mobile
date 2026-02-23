@@ -2,12 +2,14 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Alert,
+  AppState,
+  AppStateStatus,
   FlatList,
   Image,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -44,8 +46,34 @@ const ChatScreen = () => {
   const [attachments, setAttachments] = useState<any[]>([]);
   const [isOnline, setIsOnline] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [showEmojiPanel, setShowEmojiPanel] = useState(false);
+
+  const COMMON_EMOJIS = [
+    "😀","😂","😍","🥰","😎","🤔","😢","😡","👍","👎",
+    "❤️","🔥","🎉","✅","⭐","🙏","💪","🤝","👀","😅",
+    "🥳","😏","🤣","😊","😇","🤩","😴","🤧","🥺","😤",
+    "👋","✋","🤙","💯","🚀","💡","📌","📎","🎯","⚡",
+  ];
 
   const listRef = useRef<FlatList>(null);
+
+  const sortByCreatedAt = useCallback(
+    (items: any[]) =>
+      [...items].sort(
+        (a, b) =>
+          new Date(a?.createdAt || 0).getTime() - new Date(b?.createdAt || 0).getTime()
+      ),
+    []
+  );
+
+  const upsertMessage = useCallback(
+    (items: any[], incoming: any) => {
+      if (!incoming?.id) return items;
+      const base = items.filter((item) => item?.id !== incoming.id);
+      return sortByCreatedAt([...base, incoming]);
+    },
+    [sortByCreatedAt]
+  );
 
   const resolveUrl = (url?: string) => {
     if (!url) return "";
@@ -57,8 +85,9 @@ const ChatScreen = () => {
     if (!conversationId) return;
     const res = await getChatMessages(conversationId);
     const data = res.data ?? [];
-    setMessages(Array.isArray(data) ? data : []);
-  }, [conversationId]);
+    const list = Array.isArray(data) ? data : [];
+    setMessages(sortByCreatedAt(list));
+  }, [conversationId, sortByCreatedAt]);
 
   const formatMessageTime = (dateString?: string) => {
     if (!dateString) return "";
@@ -74,33 +103,67 @@ const ChatScreen = () => {
   useEffect(() => {
     if (!accessToken) return;
     let socket: Socket | null = null;
-    try {
-      socket = io(SOCKET_URL, {
-        auth: { token: accessToken },
-        transports: ["websocket"],
-      });
-      socket.on("chat:message", (payload: any) => {
-        if (payload?.conversationId !== conversationId) return;
-        const msg = payload?.message;
-        if (!msg?.id) return;
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === msg.id)) return prev;
-          return [...prev, msg];
+
+    const connect = () => {
+      if (socket?.connected) return;
+      try {
+        socket = io(SOCKET_URL, {
+          auth: { token: accessToken },
+          transports: ["websocket"],
         });
-      });
-      socket.on("chat:presence", (payload: any) => {
-        if (!payload?.userId) return;
-        if (payload.userId === peerId) {
-          setIsOnline(payload.status === "online");
-        }
-      });
-    } catch {
-      // ignore
-    }
-    return () => {
-      if (socket) socket.disconnect();
+        socket.on("chat:message", (payload: any) => {
+          if (payload?.conversationId !== conversationId) return;
+          const msg = payload?.message;
+          if (!msg?.id) return;
+          setMessages((prev) => {
+            const withoutMatchingPending = prev.filter(
+              (item) =>
+                !(
+                  item?.pending &&
+                  item?.senderId === msg?.senderId &&
+                  (item?.text || "") === (msg?.text || "")
+                )
+            );
+            return upsertMessage(withoutMatchingPending, msg);
+          });
+        });
+        socket.on("chat:presence", (payload: any) => {
+          if (!payload?.userId) return;
+          if (payload.userId === peerId) {
+            setIsOnline(payload.status === "online");
+          }
+        });
+      } catch {
+        // ignore
+      }
     };
-  }, [accessToken, conversationId, peerId]);
+
+    const disconnect = () => {
+      if (socket) {
+        socket.disconnect();
+        socket = null;
+        setIsOnline(false);
+      }
+    };
+
+    connect();
+
+    const subscription = AppState.addEventListener(
+      "change",
+      (nextState: AppStateStatus) => {
+        if (nextState === "active") {
+          connect();
+        } else if (nextState === "background" || nextState === "inactive") {
+          disconnect();
+        }
+      }
+    );
+
+    return () => {
+      subscription.remove();
+      disconnect();
+    };
+  }, [accessToken, conversationId, peerId, upsertMessage]);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -167,9 +230,10 @@ const ChatScreen = () => {
       });
       const res = await sendChatMessage(conversationId, form);
       const msg = res.data;
-      setMessages((prev) =>
-        prev.map((m) => (m.id === tempId ? msg : m))
-      );
+      setMessages((prev) => {
+        const withoutTemp = prev.filter((item) => item.id !== tempId);
+        return upsertMessage(withoutTemp, msg);
+      });
       setText("");
       setAttachments([]);
       setShowAttachMenu(false);
@@ -346,6 +410,29 @@ const ChatScreen = () => {
               ))}
             </View>
           )}
+          {/* Emoji Panel */}
+          {showEmojiPanel && (
+            <View style={styles.emojiPanel}>
+              <ScrollView
+                horizontal={false}
+                contentContainerStyle={styles.emojiGrid}
+                showsVerticalScrollIndicator={false}
+              >
+                {COMMON_EMOJIS.map((emoji) => (
+                  <TouchableOpacity
+                    key={emoji}
+                    style={styles.emojiBtn}
+                    onPress={() => {
+                      setText((prev) => prev + emoji);
+                    }}
+                  >
+                    <Text style={styles.emojiChar}>{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
           <View style={styles.inputBar}>
             <TouchableOpacity onPress={openAttach} style={styles.iconBtn}>
               <Feather
@@ -354,9 +441,21 @@ const ChatScreen = () => {
                 color="#334155"
               />
             </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setShowEmojiPanel((v) => !v);
+                setShowAttachMenu(false);
+              }}
+              style={styles.iconBtn}
+            >
+              <Text style={[styles.emojiToggleIcon, showEmojiPanel && { opacity: 0.6 }]}>
+                😊
+              </Text>
+            </TouchableOpacity>
             <TextInput
               value={text}
               onChangeText={setText}
+              onFocus={() => setShowEmojiPanel(false)}
               placeholder="Type a message"
               placeholderTextColor="#94A3B8"
               style={styles.input}
@@ -627,6 +726,32 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(12),
     borderWidth: 1,
     borderColor: "#E2E8F0",
+  },
+  emojiPanel: {
+    backgroundColor: "#F8FAFC",
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+    maxHeight: verticalScale(150),
+    paddingHorizontal: horizontalScale(8),
+    paddingVertical: verticalScale(8),
+  },
+  emojiGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: moderateScale(4),
+  },
+  emojiBtn: {
+    width: moderateScale(38),
+    height: moderateScale(38),
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: moderateScale(8),
+  },
+  emojiChar: {
+    fontSize: moderateScale(22),
+  },
+  emojiToggleIcon: {
+    fontSize: moderateScale(20),
   },
   emptyState: {
     alignItems: "center",
