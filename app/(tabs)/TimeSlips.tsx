@@ -89,6 +89,7 @@ type Tab = "All" | "Pending" | "Approved" | "Rejected";
 export default function TimeSlips() {
   const colorScheme = useColorScheme() ?? "light";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
+  const isDarkMode = colorScheme === "dark";
   const [selectedTab, setSelectedTab] = useState<Tab>("All");
   const [fabOpen, setFabOpen] = useState<boolean>(false);
   const [timestampEntries, setTimestampEntries] = useState<TimestampEntry[]>([]);
@@ -388,7 +389,7 @@ export default function TimeSlips() {
           },
         ]}
       >
-        <Feather name="alert-circle" size={48} color="#EF4444" />
+        <Feather name="alert-circle" size={48} color={colors.red} />
         <Text style={{ 
           color: colors.text, 
           fontSize: moderateScale(16),
@@ -436,21 +437,50 @@ export default function TimeSlips() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <AdminTabHeader title="Time Slips" />
       <View style={styles.cardWrapper}>
-        <View style={[styles.card, { backgroundColor: colors.white }]}>
-          <View style={styles.triangle} />
-          <View style={styles.triangle2} />
-          <View style={styles.triangle3} />
-          <View style={styles.triangle4} />
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.white, borderColor: colors.border },
+          ]}
+        >
+          <View
+            style={[
+              styles.triangle,
+              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+            ]}
+          />
+          <View
+            style={[
+              styles.triangle2,
+              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+            ]}
+          />
+          <View
+            style={[
+              styles.triangle3,
+              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+            ]}
+          />
+          <View
+            style={[
+              styles.triangle4,
+              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+            ]}
+          />
           <View style={styles.contentContainer}>
             <View style={styles.statsContainer}>
               <View style={styles.statItem}>
                 <View
                   style={[styles.statDot, { backgroundColor: "#64748B" }]}
                 />
-                <Text style={styles.statNumber}>{timestampData.all}</Text>
-                <Text style={styles.statLabel}>Total</Text>
+                <Text style={[styles.statNumber, { color: colors.text }]}>
+                  {timestampData.all}
+                </Text>
+                <Text style={[styles.statLabel, { color: colors.textMuted }]}>
+                  Total
+                </Text>
               </View>
-              <View style={styles.statDivider} />
+              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
               <View style={styles.statItem}>
                 <View
                   style={[styles.statDot, { backgroundColor: "#F59E0B" }]}
@@ -458,9 +488,11 @@ export default function TimeSlips() {
                 <Text style={[styles.statNumber, { color: "#F59E0B" }]}>
                   {timestampData.pending}
                 </Text>
-                <Text style={styles.statLabel}>Pending</Text>
+                <Text style={[styles.statLabel, { color: colors.textMuted }]}>
+                  Pending
+                </Text>
               </View>
-              <View style={styles.statDivider} />
+              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
               <View style={styles.statItem}>
                 <View
                   style={[styles.statDot, { backgroundColor: "#10B981" }]}
@@ -468,26 +500,38 @@ export default function TimeSlips() {
                 <Text style={[styles.statNumber, { color: "#10B981" }]}>
                   {timestampData.approved}
                 </Text>
-                <Text style={styles.statLabel}>Approved</Text>
+                <Text style={[styles.statLabel, { color: colors.textMuted }]}>
+                  Approved
+                </Text>
               </View>
             </View>
           </View>
         </View>
       </View>
-      <View style={styles.tabBar}>
+      <View
+        style={[
+          styles.tabBar,
+          {
+            backgroundColor: colors.inputBackground,
+            borderColor: colors.border,
+            borderWidth: 1,
+          },
+        ]}
+      >
         {tabs.map((tab) => (
           <TouchableOpacity
             key={tab}
             onPress={() => setSelectedTab(tab)}
             style={[
               styles.tabItem,
-              selectedTab === tab && styles.tabItemActive,
+              selectedTab === tab && [styles.tabItemActive, { backgroundColor: colors.primary }],
             ]}
           >
             <Text
               style={[
                 styles.tabText,
-                selectedTab === tab && styles.tabTextActive,
+                { color: colors.textMuted },
+                selectedTab === tab && [styles.tabTextActive, { color: colors.onPrimary }],
               ]}
             >
               {tab}
@@ -509,23 +553,40 @@ export default function TimeSlips() {
         }
       >
         {filteredTimestamps.map((entry) => (
-          <View key={entry.id.toString()} style={styles.timestampCard}>
-            <View style={styles.dateBadge}>
+          <View
+            key={entry.id.toString()}
+            style={[
+              styles.timestampCard,
+              { backgroundColor: colors.white, borderColor: colors.border },
+            ]}
+          >
+            <View style={[styles.dateBadge, { backgroundColor: colors.primary }]}>
               <Text style={styles.dateBadgeText}>{entry.date}</Text>
             </View>
             <View style={styles.timeEntriesContainer}>
               <View style={styles.timeEntry}>
                 <View style={styles.timeEntryHeader}>
                   <View
-                    style={[styles.entryIcon, { backgroundColor: "#E3F2FD" }]}
+                    style={[
+                      styles.entryIcon,
+                      {
+                        backgroundColor: isDarkMode
+                          ? "rgba(33,150,243,0.22)"
+                          : "#E3F2FD",
+                      },
+                    ]}
                   >
                     <Feather name="log-in" size={16} color="#2196F3" />
                   </View>
-                  <Text style={styles.entryLabel}>Check In</Text>
+                  <Text style={[styles.entryLabel, { color: colors.textSecondary }]}>
+                    Check In
+                  </Text>
                 </View>
                 {entry.checkIn && typeof entry.checkIn.time === "string" ? (
                   <View style={styles.timeDetails}>
-                    <Text style={styles.timeValue}>{entry.checkIn.time}</Text>
+                    <Text style={[styles.timeValue, { color: colors.text }]}>
+                      {entry.checkIn.time}
+                    </Text>
                     <View style={styles.statusContainer}>
                       <View
                         style={[
@@ -547,7 +608,9 @@ export default function TimeSlips() {
                   </View>
                 ) : (
                   <View style={styles.timeDetails}>
-                    <Text style={styles.noTimeValue}>Not recorded</Text>
+                    <Text style={[styles.noTimeValue, { color: colors.textMuted }]}>
+                      Not recorded
+                    </Text>
                     <View style={styles.statusContainer}>
                       <View
                         style={[
@@ -563,21 +626,32 @@ export default function TimeSlips() {
                 )}
               </View>
               <View style={styles.verticalDivider}>
-                <View style={styles.dividerLine} />
-                <View style={styles.dividerDot} />
+                <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+                <View style={[styles.dividerDot, { backgroundColor: colors.primary }]} />
               </View>
               <View style={styles.timeEntry}>
                 <View style={styles.timeEntryHeader}>
                   <View
-                    style={[styles.entryIcon, { backgroundColor: "#FFF3E0" }]}
+                    style={[
+                      styles.entryIcon,
+                      {
+                        backgroundColor: isDarkMode
+                          ? "rgba(255,152,0,0.22)"
+                          : "#FFF3E0",
+                      },
+                    ]}
                   >
                     <Feather name="log-out" size={16} color="#FF9800" />
                   </View>
-                  <Text style={styles.entryLabel}>Check Out</Text>
+                  <Text style={[styles.entryLabel, { color: colors.textSecondary }]}>
+                    Check Out
+                  </Text>
                 </View>
                 {entry.checkOut && typeof entry.checkOut.time === "string" ? (
                   <View style={styles.timeDetails}>
-                    <Text style={styles.timeValue}>{entry.checkOut.time}</Text>
+                    <Text style={[styles.timeValue, { color: colors.text }]}>
+                      {entry.checkOut.time}
+                    </Text>
                     <View style={styles.statusContainer}>
                       <View
                         style={[
@@ -599,7 +673,9 @@ export default function TimeSlips() {
                   </View>
                 ) : (
                   <View style={styles.timeDetails}>
-                    <Text style={styles.noTimeValue}>Not recorded</Text>
+                    <Text style={[styles.noTimeValue, { color: colors.textMuted }]}>
+                      Not recorded
+                    </Text>
                     <View style={styles.statusContainer}>
                       <View
                         style={[
@@ -615,22 +691,32 @@ export default function TimeSlips() {
                 )}
               </View>
             </View>
-            <View style={styles.actionButtonContainer}>
+            <View
+              style={[styles.actionButtonContainer, { borderTopColor: colors.border }]}
+            >
               <TouchableOpacity
-                style={styles.seeStatusButton}
+                style={[
+                  styles.seeStatusButton,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.border,
+                  },
+                ]}
                 onPress={() => handleSeeStatus(entry.id)}
               >
-                <Feather name="eye" size={16} color="#005F90" />
-                <Text style={styles.seeStatusText}>See Details</Text>
-                <Feather name="chevron-right" size={16} color="#005F90" />
+                <Feather name="eye" size={16} color={colors.primary} />
+                <Text style={[styles.seeStatusText, { color: colors.primary }]}>
+                  See Details
+                </Text>
+                <Feather name="chevron-right" size={16} color={colors.primary} />
               </TouchableOpacity>
             </View>
           </View>
         ))}
         {filteredTimestamps.length === 0 && (
           <View style={styles.emptyContainer}>
-            <Feather name="clock" size={48} color="#ccc" />
-            <Text style={styles.emptyText}>
+            <Feather name="clock" size={48} color={colors.textMuted} />
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
               No {selectedTab.toLowerCase()} timeslips found
             </Text>
           </View>

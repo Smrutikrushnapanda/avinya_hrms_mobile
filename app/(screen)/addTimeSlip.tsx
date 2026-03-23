@@ -1,10 +1,9 @@
 import { Feather } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import DateTimePickerModal from "react-native-modal-datetime-picker";
 import Header from "app/components/Header";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -114,21 +113,17 @@ const AddTimeSlip = () => {
     });
   };
 
-  const handleDateChange = (event: any, newDate?: Date) => {
-    setShowDatePicker(Platform.OS === "ios");
-    if (newDate) {
-      setSelectedDate(newDate);
-    }
+  const handleDateConfirm = (newDate: Date) => {
+    setShowDatePicker(false);
+    setSelectedDate(newDate);
   };
 
-  const handleTimeChange = (event: any, newTime?: Date) => {
-    setShowTimePicker(Platform.OS === "ios");
-    if (newTime) {
-      if (timePickerType === "checkin") {
-        setCheckInTime(newTime);
-      } else {
-        setCheckOutTime(newTime);
-      }
+  const handleTimeConfirm = (newTime: Date) => {
+    setShowTimePicker(false);
+    if (timePickerType === "checkin") {
+      setCheckInTime(newTime);
+    } else {
+      setCheckOutTime(newTime);
     }
   };
 
@@ -264,46 +259,55 @@ const AddTimeSlip = () => {
       <Header title="Time Slips" />
 
       <View style={styles.cardWrapper}>
-        <View style={[styles.card, { backgroundColor: colors.white }]}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.white, borderColor: colors.border, borderWidth: 1 },
+          ]}
+        >
           <View style={styles.statsContainer}>
             {/* Form Header */}
             <View style={styles.formHeader}>
-              <Feather name="clock" size={24} color="#0077B6" />
-              <Text style={styles.formTitle}>Apply for Time Slip</Text>
+              <Feather name="clock" size={24} color={colors.primary} />
+              <Text style={[styles.formTitle, { color: colors.primary }]}>
+                Apply for Time Slip
+              </Text>
             </View>
 
             {/* Date Selection */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Date</Text>
+              <Text style={[styles.label, { color: colors.text }]}>Date</Text>
               <TouchableOpacity
-                style={styles.dateInput}
+                style={[
+                  styles.dateInput,
+                  { borderColor: colors.border, backgroundColor: colors.inputBackground },
+                ]}
                 onPress={() => setShowDatePicker(true)}
               >
                 <Text
                   style={[
                     styles.dateText,
-                    { color: selectedDate ? "#333" : "#888" },
+                    { color: selectedDate ? colors.text : colors.textMuted },
                   ]}
                 >
                   {formatDate(selectedDate)}
                 </Text>
-                <Feather name="calendar" size={16} color="#0077B6" />
+                <Feather name="calendar" size={16} color={colors.primary} />
               </TouchableOpacity>
             </View>
 
-            {showDatePicker && (
-              <DateTimePicker
-                value={selectedDate}
-                mode="date"
-                display={Platform.OS === "ios" ? "inline" : "default"}
-                onChange={handleDateChange}
-                maximumDate={today}
-              />
-            )}
+            <DateTimePickerModal
+              isVisible={showDatePicker}
+              mode="date"
+              date={selectedDate}
+              onConfirm={handleDateConfirm}
+              onCancel={() => setShowDatePicker(false)}
+              maximumDate={today}
+            />
 
             {/* Option Selection */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Time</Text>
+              <Text style={[styles.label, { color: colors.text }]}>Time</Text>
               <View style={styles.radioContainer}>
                 {["Check In", "Check Out", "Both"].map((option) => (
                   <TouchableOpacity
@@ -322,12 +326,16 @@ const AddTimeSlip = () => {
                     <View
                       style={[
                         styles.radioCircle,
+                        { borderColor: colors.primary },
                         selectedOption ===
                           (option === "Check In"
                             ? "checkin"
                             : option === "Check Out"
                             ? "checkout"
-                            : "both") && styles.radioCircleSelected,
+                            : "both") && [
+                            styles.radioCircleSelected,
+                            { borderColor: colors.primary, backgroundColor: `${colors.primary}1F` },
+                          ],
                       ]}
                     >
                       {selectedOption ===
@@ -335,7 +343,9 @@ const AddTimeSlip = () => {
                           ? "checkin"
                           : option === "Check Out"
                           ? "checkout"
-                          : "both") && <View style={styles.radioDot} />}
+                          : "both") && (
+                          <View style={[styles.radioDot, { backgroundColor: colors.primary }]} />
+                        )}
                     </View>
                     <Text style={[styles.radioLabel, { color: colors.text }]}>
                       {option}
@@ -359,15 +369,18 @@ const AddTimeSlip = () => {
                       },
                     ]}
                   >
-                    <Text style={styles.label}>Check In Time</Text>
+                    <Text style={[styles.label, { color: colors.text }]}>Check In Time</Text>
                     <TouchableOpacity
-                      style={styles.dateInput}
+                      style={[
+                        styles.dateInput,
+                        { borderColor: colors.border, backgroundColor: colors.inputBackground },
+                      ]}
                       onPress={() => openTimePicker("checkin")}
                     >
-                      <Text style={styles.timeText}>
+                      <Text style={[styles.timeText, { color: colors.text }]}>
                         {formatTime(checkInTime)}
                       </Text>
-                      <Feather name="clock" size={16} color="#0077B6" />
+                      <Feather name="clock" size={16} color={colors.primary} />
                     </TouchableOpacity>
                   </View>
                 )}
@@ -383,39 +396,42 @@ const AddTimeSlip = () => {
                       },
                     ]}
                   >
-                    <Text style={styles.label}>Check Out Time</Text>
+                    <Text style={[styles.label, { color: colors.text }]}>Check Out Time</Text>
                     <TouchableOpacity
-                      style={styles.dateInput}
+                      style={[
+                        styles.dateInput,
+                        { borderColor: colors.border, backgroundColor: colors.inputBackground },
+                      ]}
                       onPress={() => openTimePicker("checkout")}
                     >
-                      <Text style={styles.timeText}>
+                      <Text style={[styles.timeText, { color: colors.text }]}>
                         {formatTime(checkOutTime)}
                       </Text>
-                      <Feather name="clock" size={16} color="#0077B6" />
+                      <Feather name="clock" size={16} color={colors.primary} />
                     </TouchableOpacity>
                   </View>
                 )}
               </View>
             )}
 
-            {showTimePicker && (
-              <DateTimePicker
-                value={
-                  timePickerType === "checkin" ? checkInTime : checkOutTime
-                }
-                mode="time"
-                display={Platform.OS === "ios" ? "inline" : "default"}
-                onChange={handleTimeChange}
-              />
-            )}
+            <DateTimePickerModal
+              isVisible={showTimePicker}
+              mode="time"
+              date={timePickerType === "checkin" ? checkInTime : checkOutTime}
+              onConfirm={handleTimeConfirm}
+              onCancel={() => setShowTimePicker(false)}
+            />
 
             {/* Reason */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Reason</Text>
+              <Text style={[styles.label, { color: colors.text }]}>Reason</Text>
               <TextInput
-                style={styles.textArea}
+                style={[
+                  styles.textArea,
+                  { borderColor: colors.border, backgroundColor: colors.inputBackground, color: colors.text },
+                ]}
                 placeholder="Enter reason for time slip..."
-                placeholderTextColor="#888"
+                placeholderTextColor={colors.textMuted}
                 value={reason}
                 onChangeText={handleReasonChange}
                 multiline
@@ -426,7 +442,7 @@ const AddTimeSlip = () => {
                 <Text
                   style={[
                     styles.wordCountText,
-                    { color: wordCount > 45 ? "#FF0000" : "#666" },
+                    { color: wordCount > 45 ? colors.red : colors.textMuted },
                   ]}
                 >
                   {wordCount}/50 words
@@ -438,6 +454,7 @@ const AddTimeSlip = () => {
             <TouchableOpacity
               style={[
                 styles.submitButton,
+                { backgroundColor: colors.primary },
                 (!selectedOption || !reason.trim() || loading) &&
                   styles.disabledButton,
               ]}
@@ -445,16 +462,16 @@ const AddTimeSlip = () => {
               disabled={!selectedOption || !reason.trim() || loading}
             >
               {loading ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={colors.onPrimary} />
               ) : (
                 <>
                   <Feather
                     name="send"
                     size={16}
-                    color="#fff"
+                    color={colors.onPrimary}
                     style={{ marginRight: 8 }}
                   />
-                  <Text style={styles.submitButtonText}>
+                  <Text style={[styles.submitButtonText, { color: colors.onPrimary }]}>
                     Submit Application
                   </Text>
                 </>

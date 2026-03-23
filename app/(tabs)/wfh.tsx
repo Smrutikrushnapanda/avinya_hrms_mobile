@@ -16,10 +16,12 @@ import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import { getWfhBalance, getWfhRequests } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
 import { darkTheme, lightTheme } from "../constants/colors";
+import type { AppTheme } from "../constants/colors";
 
 const Wfh = () => {
   const colorScheme = useColorScheme() ?? "light";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
+  const isDarkMode = colorScheme === "dark";
   const route = useRouter();
 
   const { user } = useAuthStore();
@@ -144,45 +146,87 @@ const Wfh = () => {
         <AdminTabHeader title="WFH" />
 
         <View style={styles.cardWrapper}>
-          <View style={[styles.card, { backgroundColor: colors.white }]}>
-            <View style={styles.triangle} />
-            <View style={styles.triangle2} />
-            <View style={styles.triangle3} />
-            <View style={styles.triangle4} />
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: colors.white, borderColor: colors.border },
+            ]}
+          >
+            <View
+              style={[
+                styles.triangle,
+                { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+              ]}
+            />
+            <View
+              style={[
+                styles.triangle2,
+                { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+              ]}
+            />
+            <View
+              style={[
+                styles.triangle3,
+                { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+              ]}
+            />
+            <View
+              style={[
+                styles.triangle4,
+                { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+              ]}
+            />
             <View style={styles.contentContainer}>
               <View style={styles.leaveRow}>
-                <View style={[styles.iconWrapper, { backgroundColor: "#E3F2FD" }]}>
+                <View
+                  style={[
+                    styles.iconWrapper,
+                    {
+                      backgroundColor: isDarkMode
+                        ? "rgba(33,150,243,0.22)"
+                        : "#E3F2FD",
+                    },
+                  ]}
+                >
                   <Feather name="home" size={20} color="#2196F3" />
                 </View>
                 <View style={styles.textContainer}>
-                  <Text style={styles.typeText}>WFH</Text>
-                  <Text style={styles.labelText}>Balance</Text>
+                  <Text style={[styles.typeText, { color: colors.text }]}>WFH</Text>
+                  <Text style={[styles.labelText, { color: colors.textMuted }]}>Balance</Text>
                 </View>
                 <View style={styles.rightContainer}>
-                  <Text style={styles.countText}>
+                  <Text style={[styles.countText, { color: colors.primary }]}>
                     {wfhBalance?.closingBalance ?? 0}
                   </Text>
-                  <Text style={styles.dateText}>Available</Text>
+                  <Text style={[styles.dateText, { color: colors.textMuted }]}>
+                    Available
+                  </Text>
                 </View>
               </View>
             </View>
           </View>
         </View>
 
-        <View style={styles.tabBar}>
+        <View
+          style={[
+            styles.tabBar,
+            { backgroundColor: colors.inputBackground, borderColor: colors.border },
+          ]}
+        >
           {tabs.map((tab) => (
             <TouchableOpacity
               key={tab}
               onPress={() => setSelectedTab(tab)}
               style={[
                 styles.tabItem,
-                selectedTab === tab && styles.tabItemActive,
+                selectedTab === tab && [styles.tabItemActive, { backgroundColor: colors.primary }],
               ]}
             >
               <Text
                 style={[
                   styles.tabText,
-                  selectedTab === tab && styles.tabTextActive,
+                  { color: colors.textMuted },
+                  selectedTab === tab && [styles.tabTextActive, { color: colors.onPrimary }],
                 ]}
               >
                 {tab}
@@ -196,32 +240,49 @@ const Wfh = () => {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
           }
         >
           {!loading && filtered.length === 0 && (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No WFH requests found</Text>
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                No WFH requests found
+              </Text>
             </View>
           )}
           {filtered.map((req) => (
-            <View key={req.id} style={styles.leaveCard}>
+            <View
+              key={req.id}
+              style={[
+                styles.leaveCard,
+                { backgroundColor: colors.white, borderColor: colors.border },
+              ]}
+            >
               <View style={styles.leaveCardHeader}>
-                <Text style={styles.leaveDateText}>
+                <Text style={[styles.leaveDateText, { color: colors.text }]}>
                   {formatDate(req.createdAt)}
                 </Text>
-                <Text style={styles.leaveTypeText}>WFH</Text>
+                <Text style={[styles.leaveTypeText, { color: colors.textSecondary }]}>
+                  WFH
+                </Text>
               </View>
               <View style={styles.leaveCardBody}>
                 <View>
-                  <Text style={styles.cardLabel}>Dates</Text>
-                  <Text style={styles.cardValue}>
+                  <Text style={[styles.cardLabel, { color: colors.textMuted }]}>Dates</Text>
+                  <Text style={[styles.cardValue, { color: colors.text }]}>
                     {formatDate(req.date)} - {formatDate(req.endDate || req.date)}
                   </Text>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
-                  <Text style={styles.cardLabel}>Days</Text>
-                  <Text style={styles.cardValue}>{req.numberOfDays ?? "-"}</Text>
+                  <Text style={[styles.cardLabel, { color: colors.textMuted }]}>Days</Text>
+                  <Text style={[styles.cardValue, { color: colors.text }]}>
+                    {req.numberOfDays ?? "-"}
+                  </Text>
                 </View>
               </View>
               <View style={styles.statusContainer}>
@@ -259,7 +320,7 @@ const Wfh = () => {
                 </Text>
               </View>
 
-              <ApprovalTimeline status={getApprovalState(req)} />
+              <ApprovalTimeline status={getApprovalState(req)} colors={colors} />
             </View>
           ))}
         </ScrollView>
@@ -268,6 +329,7 @@ const Wfh = () => {
           style={[
             styles.fab,
             {
+              backgroundColor: colors.primary,
               transform: [
                 { translateX: -moderateScale(28) },
                 { translateY: bounceValue },
@@ -276,7 +338,7 @@ const Wfh = () => {
           ]}
         >
           <TouchableOpacity onPress={handleAddWfh}>
-            <Feather name="plus" size={24} color="#ffffffff" />
+            <Feather name="plus" size={24} color={colors.onPrimary} />
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -286,12 +348,14 @@ const Wfh = () => {
 
 const ApprovalTimeline = ({
   status,
+  colors,
 }: {
   status: {
     managerStatus: "pending" | "approved" | "rejected";
     hrStatus: "pending" | "approved" | "rejected";
     showManager: boolean;
   };
+  colors: AppTheme;
 }) => {
   const pulse = useRef(new Animated.Value(0)).current;
 
@@ -336,11 +400,18 @@ const ApprovalTimeline = ({
   const showManager = status.showManager;
 
   return (
-    <View style={styles.timelineContainer}>
+    <View
+      style={[
+        styles.timelineContainer,
+        { backgroundColor: colors.inputBackground, borderColor: colors.border },
+      ]}
+    >
       <View style={styles.timelineRow}>
         <View style={styles.timelineStep}>
           <View style={[styles.dot, styles.dotApproved]} />
-          <Text style={styles.timelineLabel}>Applied</Text>
+          <Text style={[styles.timelineLabel, { color: colors.textSecondary }]}>
+            Applied
+          </Text>
         </View>
 
         {showManager ? (
@@ -363,7 +434,9 @@ const ApprovalTimeline = ({
                   ]}
                 />
               )}
-              <Text style={styles.timelineLabel}>Manager</Text>
+              <Text style={[styles.timelineLabel, { color: colors.textSecondary }]}>
+                Manager
+              </Text>
             </View>
           </>
         ) : null}
@@ -386,7 +459,9 @@ const ApprovalTimeline = ({
               ]}
             />
           )}
-          <Text style={styles.timelineLabel}>HR</Text>
+          <Text style={[styles.timelineLabel, { color: colors.textSecondary }]}>
+            HR
+          </Text>
         </View>
       </View>
     </View>
@@ -528,7 +603,7 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: "row",
     justifyContent: "space-around",
-    backgroundColor: "#f8f9fa",
+    borderWidth: 1,
     borderRadius: moderateScale(12),
     marginTop: verticalScale(24),
     marginHorizontal: horizontalScale(20),
@@ -678,7 +753,7 @@ const styles = StyleSheet.create({
     width: moderateScale(56),
     height: moderateScale(56),
     borderRadius: moderateScale(28),
-    backgroundColor: "#005F90",
+    backgroundColor: lightTheme.primary,
     justifyContent: "center",
     alignItems: "center",
     elevation: 8,

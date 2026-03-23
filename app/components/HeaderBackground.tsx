@@ -1,18 +1,25 @@
+import { Image } from "expo-image";
 import React, { useEffect, useRef } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 
 const PARTICLES = [
-  { key: "t1", size: 8, left: "10%", top: 14, type: "circle", duration: 5200, delay: 0, drift: 14, float: 18 },
-  { key: "t2", size: 12, left: "28%", top: 52, type: "square", duration: 6400, delay: 600, drift: 10, float: 16 },
-  { key: "t3", size: 6, left: "46%", top: 18, type: "circle", duration: 5600, delay: 1200, drift: 12, float: 20 },
-  { key: "t4", size: 10, left: "64%", top: 34, type: "square", duration: 7000, delay: 300, drift: 16, float: 14 },
-  { key: "t5", size: 14, left: "82%", top: 10, type: "circle", duration: 7600, delay: 900, drift: 10, float: 22 },
-  { key: "t6", size: 7, left: "20%", top: 88, type: "circle", duration: 6200, delay: 1500, drift: 8, float: 16 },
-  { key: "t7", size: 11, left: "58%", top: 86, type: "square", duration: 6800, delay: 400, drift: 12, float: 18 },
-  { key: "t8", size: 9, left: "74%", top: 92, type: "circle", duration: 5900, delay: 1100, drift: 9, float: 15 },
+  { key: "t1", size: 8, left: "10%" as const, top: 14, type: "circle", duration: 5200, delay: 0, drift: 14, float: 18 },
+  { key: "t2", size: 12, left: "28%" as const, top: 52, type: "square", duration: 6400, delay: 600, drift: 10, float: 16 },
+  { key: "t3", size: 6, left: "46%" as const, top: 18, type: "circle", duration: 5600, delay: 1200, drift: 12, float: 20 },
+  { key: "t4", size: 10, left: "64%" as const, top: 34, type: "square", duration: 7000, delay: 300, drift: 16, float: 14 },
+  { key: "t5", size: 14, left: "82%" as const, top: 10, type: "circle", duration: 7600, delay: 900, drift: 10, float: 22 },
+  { key: "t6", size: 7, left: "20%" as const, top: 88, type: "circle", duration: 6200, delay: 1500, drift: 8, float: 16 },
+  { key: "t7", size: 11, left: "58%" as const, top: 86, type: "square", duration: 6800, delay: 400, drift: 12, float: 18 },
+  { key: "t8", size: 9, left: "74%" as const, top: 92, type: "circle", duration: 5900, delay: 1100, drift: 9, float: 15 },
 ];
 
-const HeaderBackground = () => {
+const HeaderBackground = ({
+  backgroundColor,
+  mediaUrl,
+}: {
+  backgroundColor?: string;
+  mediaUrl?: string | null;
+}) => {
   const particleAnims = useRef(
     PARTICLES.map(() => new Animated.Value(0))
   ).current;
@@ -45,7 +52,16 @@ const HeaderBackground = () => {
 
   return (
     <View style={styles.wrapper} pointerEvents="none">
-      <View style={styles.backgroundLayer}>
+      <View style={[styles.backgroundLayer, backgroundColor ? { backgroundColor } : null]}>
+        {mediaUrl ? (
+          <Image
+            source={{ uri: mediaUrl }}
+            style={styles.media}
+            contentFit="cover"
+            transition={200}
+          />
+        ) : null}
+        {mediaUrl ? <View style={styles.mediaOverlay} /> : null}
         <View style={styles.softGlow} />
         <View style={styles.softGlowAlt} />
         <View style={styles.ridge} />
@@ -90,21 +106,20 @@ const HeaderBackground = () => {
 
 const styles = StyleSheet.create({
   wrapper: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 200,
+    ...StyleSheet.absoluteFillObject,
     overflow: "hidden",
     zIndex: 0,
   },
   backgroundLayer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 200,
+    ...StyleSheet.absoluteFillObject,
     overflow: "hidden",
+  },
+  media: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mediaOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.16)",
   },
   softGlow: {
     position: "absolute",
@@ -136,11 +151,7 @@ const styles = StyleSheet.create({
     transform: [{ rotate: "-2deg" }],
   },
   particles: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 180,
+    ...StyleSheet.absoluteFillObject,
     overflow: "hidden",
   },
   particle: {

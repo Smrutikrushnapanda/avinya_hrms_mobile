@@ -15,7 +15,7 @@ interface User {
   mobileNumber: string;
   organizationId: string;
   mustChangePassword: boolean;
-  profileImage: string; // Added for photoUrl
+  profileImage: string; // Signed passport/photo URL
   designation: string; // Added for designation.name
 }
 
@@ -73,7 +73,10 @@ const useAuthStore = create<AuthState>((set) => ({
         const employeeData = response.data; // Assuming API returns data in `data` field
         const updatedUser: User = {
           ...formattedUser,
-          profileImage: employeeData.photoUrl || "",
+          profileImage:
+            employeeData.passportPhotoUrl ||
+            employeeData.photoUrl ||
+            "",
           designation: employeeData.designation?.name || "",
         };
         await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
@@ -108,7 +111,10 @@ const useAuthStore = create<AuthState>((set) => ({
           const employeeData = response.data;
           const updatedUser: User = {
             ...user,
-            profileImage: employeeData.photoUrl || "",
+            profileImage:
+              employeeData.passportPhotoUrl ||
+              employeeData.photoUrl ||
+              "",
             designation: employeeData.designation?.name || "",
           };
           await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
@@ -141,7 +147,10 @@ const useAuthStore = create<AuthState>((set) => ({
         user: state.user
           ? {
               ...state.user,
-              profileImage: employeeData.photoUrl || "",
+              profileImage:
+                employeeData.passportPhotoUrl ||
+                employeeData.photoUrl ||
+                "",
               designation: employeeData.designation?.name || "",
             }
           : state.user,
@@ -153,7 +162,10 @@ const useAuthStore = create<AuthState>((set) => ({
         const user = JSON.parse(userString);
         const updatedUser = {
           ...user,
-          profileImage: employeeData.photoUrl || "",
+          profileImage:
+            employeeData.passportPhotoUrl ||
+            employeeData.photoUrl ||
+            "",
           designation: employeeData.designation?.name || "",
         };
         await AsyncStorage.setItem("user", JSON.stringify(updatedUser));

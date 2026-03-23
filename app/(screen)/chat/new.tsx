@@ -72,25 +72,30 @@ const NewChat = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.primary }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={20} color="#fff" />
+          <Ionicons name="arrow-back" size={20} color={colors.onPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>New Chat</Text>
+        <Text style={[styles.headerTitle, { color: colors.onPrimary }]}>New Chat</Text>
       </View>
 
-      <View style={styles.searchBar}>
-        <Feather name="search" size={18} color="#6B7280" />
+      <View
+        style={[
+          styles.searchBar,
+          { backgroundColor: colors.white, borderColor: colors.border },
+        ]}
+      >
+        <Feather name="search" size={18} color={colors.textMuted} />
         <TextInput
           placeholder="Search employees"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.textMuted}
           value={search}
           onChangeText={setSearch}
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: colors.text }]}
         />
         {search.length > 0 && (
           <TouchableOpacity onPress={() => setSearch("")}>
-            <Feather name="x" size={18} color="#6B7280" />
+            <Feather name="x" size={18} color={colors.textMuted} />
           </TouchableOpacity>
         )}
       </View>
@@ -100,30 +105,34 @@ const NewChat = () => {
         keyExtractor={(item) => item.userId}
         renderItem={({ item }) => (
           <TouchableOpacity
-            style={styles.employeeRow}
+            style={[styles.employeeRow, { backgroundColor: colors.white }]}
             onPress={() => startChatWith(item)}
           >
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarText}>
+            <View
+              style={[styles.avatarCircle, { backgroundColor: colors.inputBackground }]}
+            >
+              <Text style={[styles.avatarText, { color: colors.text }]}>
                 {item.firstName?.charAt(0)?.toUpperCase() || "U"}
               </Text>
             </View>
             <View>
-              <Text style={styles.employeeName}>
+              <Text style={[styles.employeeName, { color: colors.text }]}>
                 {item.firstName} {item.lastName}
               </Text>
-              <Text style={styles.employeeSub}>
+              <Text style={[styles.employeeSub, { color: colors.textMuted }]}>
                 {item.designation?.name || item.designationName || "Employee"}
               </Text>
             </View>
           </TouchableOpacity>
         )}
-        ItemSeparatorComponent={() => <View style={styles.divider} />}
+        ItemSeparatorComponent={() => <View style={[styles.divider, { backgroundColor: colors.border }]} />}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           !loading ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No employees found</Text>
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                No employees found
+              </Text>
             </View>
           ) : null
         }

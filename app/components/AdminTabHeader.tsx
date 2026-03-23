@@ -16,7 +16,7 @@ import { io, Socket } from "socket.io-client";
 import HeaderBackground from "./HeaderBackground";
 
 const SOCKET_URL =
-  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinya-hrms-backend.onrender.com";
+  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinyahrms.duckdns.org";
 
 interface AdminTabHeaderProps {
   title: string;
@@ -24,7 +24,10 @@ interface AdminTabHeaderProps {
 
 const AdminTabHeader = ({ title }: AdminTabHeaderProps) => {
   const colorScheme = useColorScheme() ?? "light";
+  const isDarkMode = colorScheme === "dark";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
+  const controlBg = isDarkMode ? "rgba(9,15,27,0.82)" : "rgba(255,255,255,0.92)";
+  const controlBorder = isDarkMode ? colors.border : "rgba(255,255,255,0.35)";
   const router = useRouter();
   const { accessToken } = useAuthStore();
   const { unreadCount, setUnreadCount, incrementUnread } = useMessageStore();
@@ -80,10 +83,15 @@ const AdminTabHeader = ({ title }: AdminTabHeaderProps) => {
 
           <View style={styles.rightSection}>
             <TouchableOpacity onPress={() => router.push("/(screen)/message")}>
-              <View style={styles.notificationIcon}>
+              <View
+                style={[
+                  styles.notificationIcon,
+                  { backgroundColor: controlBg, borderColor: controlBorder },
+                ]}
+              >
                 <Ionicons name="notifications" size={20} color={colors.primary} />
                 {unreadCount > 0 && (
-                  <View style={styles.notificationBadge}>
+                  <View style={[styles.notificationBadge, { backgroundColor: colors.red }]}>
                     <Text style={styles.badgeText}>
                       {unreadCount > 99 ? "99+" : String(unreadCount)}
                     </Text>
@@ -138,7 +146,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.92)",
+    borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
     position: "relative",
@@ -150,7 +158,6 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: "#ff4444",
     justifyContent: "center",
     alignItems: "center",
   },

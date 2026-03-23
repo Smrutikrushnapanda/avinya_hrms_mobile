@@ -1,11 +1,10 @@
 import { Feather } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import DateTimePickerModal from "react-native-modal-datetime-picker";
 import Header from "app/components/Header";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -69,11 +68,8 @@ const WfhForm = () => {
     return normalized;
   };
 
-  const onStartDateChange = (event, selectedDate) => {
-    if (Platform.OS === "android") {
-      setShowStartPicker(false);
-    }
-    if (event?.type === "dismissed" || !selectedDate) return;
+  const onStartDateConfirm = (selectedDate: Date) => {
+    setShowStartPicker(false);
     const normalized = normalizeDate(selectedDate);
     const safeDate = normalized < today ? today : normalized;
     setStartDate(safeDate);
@@ -82,17 +78,14 @@ const WfhForm = () => {
     }
   };
 
-  const onEndDateChange = (event, selectedDate) => {
-    if (Platform.OS === "android") {
-      setShowEndPicker(false);
-    }
-    if (event?.type === "dismissed" || !selectedDate) return;
+  const onEndDateConfirm = (selectedDate: Date) => {
+    setShowEndPicker(false);
     const normalized = normalizeDate(selectedDate);
     const safeDate = normalized < startDate ? startDate : normalized;
     setEndDate(safeDate);
   };
 
-  const formatDate = (date) =>
+  const formatDate = (date: Date) =>
     `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
 
   const handleSubmit = async () => {
@@ -127,57 +120,75 @@ const WfhForm = () => {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Header title="WFH" />
       <View style={styles.cardWrapper}>
-        <View style={[styles.card, { backgroundColor: colors.white }]}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.white, borderColor: colors.border, borderWidth: 1 },
+          ]}
+        >
           <View style={styles.formHeader}>
-            <Feather name="home" size={24} color="#0077B6" />
-            <Text style={styles.formTitle}>Apply Work From Home</Text>
+            <Feather name="home" size={24} color={colors.primary} />
+            <Text style={[styles.formTitle, { color: colors.primary }]}>
+              Apply Work From Home
+            </Text>
           </View>
 
           <View style={styles.row}>
             <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-              <Text style={styles.label}>Start Date</Text>
+              <Text style={[styles.label, { color: colors.text }]}>Start Date</Text>
               <TouchableOpacity
-                style={styles.dateInput}
+                style={[
+                  styles.dateInput,
+                  { borderColor: colors.border, backgroundColor: colors.inputBackground },
+                ]}
                 onPress={() => setShowStartPicker(true)}
               >
-                <Text style={styles.dateText}>{formatDate(startDate)}</Text>
+                <Text style={[styles.dateText, { color: colors.text }]}>
+                  {formatDate(startDate)}
+                </Text>
               </TouchableOpacity>
-              {showStartPicker && (
-                <DateTimePicker
-                  value={startDate}
-                  mode="date"
-                  display="default"
-                  onChange={onStartDateChange}
-                  minimumDate={today}
-                />
-              )}
+              <DateTimePickerModal
+                isVisible={showStartPicker}
+                mode="date"
+                date={startDate}
+                onConfirm={onStartDateConfirm}
+                onCancel={() => setShowStartPicker(false)}
+                minimumDate={today}
+              />
             </View>
             <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-              <Text style={styles.label}>End Date</Text>
+              <Text style={[styles.label, { color: colors.text }]}>End Date</Text>
               <TouchableOpacity
-                style={styles.dateInput}
+                style={[
+                  styles.dateInput,
+                  { borderColor: colors.border, backgroundColor: colors.inputBackground },
+                ]}
                 onPress={() => setShowEndPicker(true)}
               >
-                <Text style={styles.dateText}>{formatDate(endDate)}</Text>
+                <Text style={[styles.dateText, { color: colors.text }]}>
+                  {formatDate(endDate)}
+                </Text>
               </TouchableOpacity>
-              {showEndPicker && (
-                <DateTimePicker
-                  value={endDate}
-                  mode="date"
-                  display="default"
-                  onChange={onEndDateChange}
-                  minimumDate={startDate}
-                />
-              )}
+              <DateTimePickerModal
+                isVisible={showEndPicker}
+                mode="date"
+                date={endDate}
+                onConfirm={onEndDateConfirm}
+                onCancel={() => setShowEndPicker(false)}
+                minimumDate={startDate}
+              />
             </View>
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Reason</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Reason</Text>
             <TextInput
-              style={styles.textArea}
+              style={[
+                styles.textArea,
+                { borderColor: colors.border, backgroundColor: colors.inputBackground, color: colors.text },
+              ]}
               placeholder="Enter reason for WFH...(optional)"
-              placeholderTextColor="#888"
+              placeholderTextColor={colors.textMuted}
               value={reason}
               onChangeText={setReason}
               multiline
@@ -187,21 +198,23 @@ const WfhForm = () => {
           </View>
 
           <TouchableOpacity
-            style={styles.submitButton}
+            style={[styles.submitButton, { backgroundColor: colors.primary }]}
             onPress={handleSubmit}
             disabled={submitting}
           >
             {submitting ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={colors.onPrimary} />
             ) : (
               <>
                 <Feather
                   name="send"
                   size={16}
-                  color="#fff"
+                  color={colors.onPrimary}
                   style={{ marginRight: 8 }}
                 />
-                <Text style={styles.submitButtonText}>Submit Request</Text>
+                <Text style={[styles.submitButtonText, { color: colors.onPrimary }]}>
+                  Submit Request
+                </Text>
               </>
             )}
           </TouchableOpacity>

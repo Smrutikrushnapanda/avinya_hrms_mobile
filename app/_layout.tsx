@@ -3,17 +3,18 @@ import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useMemo, useState } from "react";
 import { Appearance, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { AlertNotificationRoot } from "react-native-alert-notification";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { io, Socket } from "socket.io-client";
 import useAuthStore from "../store/useUserStore";
 import { getEmployees } from "../api/api";
+import { isThemePreference, THEME_PREFERENCE_KEY } from "utils/themePreference";
 
 const SOCKET_URL =
-  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinya-hrms-backend.onrender.com";
+  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinyahrms.duckdns.org";
 
 export default function RootLayout() {
-  Appearance.setColorScheme("light");
   const router = useRouter();
   const { accessToken, user } = useAuthStore();
   const [employees, setEmployees] = useState<any[]>([]);
@@ -24,6 +25,25 @@ export default function RootLayout() {
     message?: string;
     avatar?: string;
   }>({ visible: false });
+
+  useEffect(() => {
+    const applySavedTheme = async () => {
+      try {
+        const savedTheme = await AsyncStorage.getItem(THEME_PREFERENCE_KEY);
+        if (isThemePreference(savedTheme)) {
+          Appearance.setColorScheme(savedTheme);
+          return;
+        }
+      } catch {
+        // ignore preference read errors
+      }
+
+      // Preserve existing app behavior when no preference is saved.
+      Appearance.setColorScheme("light");
+    };
+
+    applySavedTheme();
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -71,7 +91,10 @@ export default function RootLayout() {
         const messageText =
           payload?.message?.text ||
           (payload?.message?.attachments?.length ? "Attachment" : "New message");
-        const avatarUrl = sender?.photoUrl || "";
+        const avatarUrl =
+          sender?.passportPhotoUrl ||
+          sender?.photoUrl ||
+          "";
         setBanner({
           visible: true,
           conversationId: payload.conversationId,

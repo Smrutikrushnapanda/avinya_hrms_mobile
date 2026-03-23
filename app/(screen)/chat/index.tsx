@@ -5,6 +5,7 @@ import {
   AppState,
   AppStateStatus,
   FlatList,
+  Modal,
   RefreshControl,
   StyleSheet,
   Text,
@@ -21,7 +22,16 @@ import { getChatConversations, getEmployees } from "../../../api/api";
 import { io, Socket } from "socket.io-client";
 
 const SOCKET_URL =
-  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinya-hrms-backend.onrender.com";
+  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinyahrms.duckdns.org";
+
+const normalizeSystemText = (text?: string) => (text || "").trim().toLowerCase();
+
+const getMeetingSystemLabel = (text?: string) => {
+  const normalized = normalizeSystemText(text);
+  if (normalized === "meeting started" || normalized === "you entered") return "You entered";
+  if (normalized === "meeting ended" || normalized === "you left") return "You left";
+  return null;
+};
 
 const ChatList = () => {
   const colorScheme = useColorScheme() ?? "light";
@@ -35,6 +45,7 @@ const ChatList = () => {
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<any[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const [viewPhoto, setViewPhoto] = useState<string | null>(null);
 
   const loadConversations = useCallback(async () => {
     setLoading(true);
@@ -229,9 +240,11 @@ const ChatList = () => {
     const p = getDisplayParticipant(item);
     const name = `${p?.firstName || ""} ${p?.lastName || ""}`.trim() || "Chat";
     const emp = p?.userId ? employeeMap.get(p.userId) : null;
-    const avatar = emp?.photoUrl || "";
+    const avatar = emp?.passportPhotoUrl || emp?.photoUrl || "";
+    const avatarUrl = avatar ? resolveUrl(avatar) : "";
+    const meetingPreview = getMeetingSystemLabel(item.lastMessage?.text);
     const lastMessage = item.lastMessage?.text
-      ? item.lastMessage.text
+      ? meetingPreview || item.lastMessage.text
       : item.lastMessage?.attachments?.length
       ? "Attachment"
       : "Say hi";
@@ -241,27 +254,34 @@ const ChatList = () => {
       <TouchableOpacity
         style={[
           styles.chatRow,
+          { borderBottomColor: colors.border, backgroundColor: colors.white },
           item.unreadCount > 0 && styles.chatRowUnread,
+          item.unreadCount > 0 && { backgroundColor: colors.inputBackground },
         ]}
         onPress={() => openConversation(item.id, name, avatar, p?.userId)}
       >
         <View style={styles.avatar}>
-          {avatar ? (
-            <View style={styles.avatarCircle}>
-              <Image
-                source={{ uri: resolveUrl(avatar) }}
-                style={styles.avatarImage}
-              />
+          <TouchableOpacity
+            onPress={() => avatarUrl && setViewPhoto(avatarUrl)}
+            activeOpacity={avatarUrl ? 0.7 : 1}
+          >
+            <View
+              style={[
+                styles.avatarCircle,
+                { backgroundColor: colors.inputBackground },
+              ]}
+            >
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+              ) : (
+                <Text style={[styles.avatarText, { color: colors.text }]}>
+                  {name.charAt(0).toUpperCase()}
+                </Text>
+              )}
             </View>
-          ) : (
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarText}>
-                {name.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
+          </TouchableOpacity>
           {p?.userId && onlineUsers.has(p.userId) && (
-            <View style={styles.onlineDot} />
+            <View style={[styles.onlineDot, { borderColor: colors.white }]} />
           )}
         </View>
         <View style={styles.chatInfo}>
@@ -269,7 +289,9 @@ const ChatList = () => {
             <Text
               style={[
                 styles.chatName,
+                { color: colors.text },
                 item.unreadCount > 0 && styles.chatNameUnread,
+                item.unreadCount > 0 && { color: colors.text },
               ]}
             >
               {name}
@@ -277,7 +299,9 @@ const ChatList = () => {
             <Text
               style={[
                 styles.chatTime,
+                { color: colors.textMuted },
                 item.unreadCount > 0 && styles.chatTimeUnread,
+                item.unreadCount > 0 && { color: colors.textSecondary },
               ]}
             >
               {time}
@@ -287,7 +311,9 @@ const ChatList = () => {
             <Text
               style={[
                 styles.chatPreview,
+                { color: colors.textMuted },
                 item.unreadCount > 0 && styles.chatPreviewUnread,
+                item.unreadCount > 0 && { color: colors.textSecondary },
               ]}
               numberOfLines={1}
             >
@@ -306,47 +332,67 @@ const ChatList = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.primary }]}>
         <View style={styles.headerLeft}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={20} color="#fff" />
+            <Ionicons name="arrow-back" size={20} color={colors.onPrimary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Chats</Text>
+          <Text style={[styles.headerTitle, { color: colors.onPrimary }]}>Chats</Text>
         </View>
         <TouchableOpacity onPress={() => router.push("/(screen)/chat/new")}>
-          <Feather name="edit-2" size={20} color="#fff" />
+          <Feather name="edit-2" size={20} color={colors.onPrimary} />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.searchBar}>
-        <Feather name="search" size={18} color="#6B7280" />
+      <View
+        style={[
+          styles.searchBar,
+          { backgroundColor: colors.white, borderColor: colors.border },
+        ]}
+      >
+        <Feather name="search" size={18} color={colors.textMuted} />
         <TextInput
           placeholder="Search"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.textMuted}
           value={search}
           onChangeText={setSearch}
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: colors.text }]}
         />
         {search.length > 0 && (
           <TouchableOpacity onPress={() => setSearch("")}>
-            <Feather name="x" size={18} color="#6B7280" />
+            <Feather name="x" size={18} color={colors.textMuted} />
           </TouchableOpacity>
         )}
       </View>
 
       <View style={styles.summaryBar}>
-        <View style={styles.summaryPill}>
-          <Text style={styles.summaryLabel}>All</Text>
-          <Text style={styles.summaryValue}>{summary.total}</Text>
+        <View
+          style={[
+            styles.summaryPill,
+            { backgroundColor: colors.inputBackground, borderColor: colors.border },
+          ]}
+        >
+          <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>All</Text>
+          <Text style={[styles.summaryValue, { color: colors.text }]}>{summary.total}</Text>
         </View>
-        <View style={styles.summaryPill}>
-          <Text style={styles.summaryLabel}>Unread</Text>
-          <Text style={styles.summaryValue}>{summary.unread}</Text>
+        <View
+          style={[
+            styles.summaryPill,
+            { backgroundColor: colors.inputBackground, borderColor: colors.border },
+          ]}
+        >
+          <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Unread</Text>
+          <Text style={[styles.summaryValue, { color: colors.text }]}>{summary.unread}</Text>
         </View>
-        <View style={styles.summaryPill}>
+        <View
+          style={[
+            styles.summaryPill,
+            { backgroundColor: colors.inputBackground, borderColor: colors.border },
+          ]}
+        >
           <View style={styles.onlineDotSm} />
-          <Text style={styles.summaryLabel}>Online</Text>
-          <Text style={styles.summaryValue}>{summary.online}</Text>
+          <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Online</Text>
+          <Text style={[styles.summaryValue, { color: colors.text }]}>{summary.online}</Text>
         </View>
       </View>
 
@@ -355,24 +401,63 @@ const ChatList = () => {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
         }
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           !loading ? (
             <View style={styles.emptyState}>
-              <Feather name="message-circle" size={40} color="#cbd5e1" />
-              <Text style={styles.emptyText}>No conversations yet</Text>
+              <Feather name="message-circle" size={40} color={colors.textMuted} />
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                No conversations yet
+              </Text>
               <TouchableOpacity
-                style={styles.emptyCta}
+                style={[styles.emptyCta, { backgroundColor: colors.primary }]}
                 onPress={() => router.push("/(screen)/chat/new")}
               >
-                <Text style={styles.emptyCtaText}>Start a chat</Text>
+                <Text style={[styles.emptyCtaText, { color: colors.onPrimary }]}>
+                  Start a chat
+                </Text>
               </TouchableOpacity>
             </View>
           ) : null
         }
       />
+
+      {/* Profile photo viewer modal */}
+      <Modal
+        visible={!!viewPhoto}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewPhoto(null)}
+      >
+        <TouchableOpacity
+          style={styles.photoModalOverlay}
+          activeOpacity={1}
+          onPress={() => setViewPhoto(null)}
+        >
+          <View style={styles.photoModalContent}>
+            {viewPhoto && (
+              <Image
+                source={{ uri: viewPhoto }}
+                style={styles.photoModalImage}
+                resizeMode="contain"
+              />
+            )}
+            <TouchableOpacity
+              style={styles.photoModalClose}
+              onPress={() => setViewPhoto(null)}
+            >
+              <Feather name="x" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
     </View>
   );
@@ -585,6 +670,33 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "700",
     fontSize: moderateScale(12),
+  },
+  photoModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photoModalContent: {
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photoModalImage: {
+    width: moderateScale(300),
+    height: moderateScale(300),
+    borderRadius: moderateScale(16),
+  },
+  photoModalClose: {
+    position: "absolute",
+    top: -moderateScale(14),
+    right: -moderateScale(14),
+    width: moderateScale(30),
+    height: moderateScale(30),
+    borderRadius: moderateScale(15),
+    backgroundColor: "rgba(0,0,0,0.7)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
 

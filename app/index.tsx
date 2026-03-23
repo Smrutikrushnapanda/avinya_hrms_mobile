@@ -1,17 +1,18 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, ActivityIndicator } from "react-native";
+import { View } from "react-native";
+import * as SplashScreen from "expo-splash-screen";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import useAuthStore from "../store/useUserStore";
 import WelcomeScreen from "./(screen)/welcome";
 
+SplashScreen.preventAutoHideAsync();
+
 export default function Index() {
   const router = useRouter();
   const { initializeAuth } = useAuthStore();
   const routedRef = useRef(false);
-
-  const [checkingStorage, setCheckingStorage] = useState(true);
-  const [hasToken, setHasToken] = useState<string | null>(null);
+  const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
     if (routedRef.current) return;
@@ -28,42 +29,30 @@ export default function Index() {
 
         const storedToken = await AsyncStorage.getItem("token");
         if (storedToken) {
-          setHasToken(storedToken);
           routedRef.current = true;
           router.replace("/(tabs)");
+          return;
         }
+
+        setShowWelcome(true);
       } catch (err) {
         console.log("Error checking login:", err);
+        setShowWelcome(true);
       } finally {
-        setCheckingStorage(false);
+        await SplashScreen.hideAsync();
       }
     };
 
     checkLogin();
   }, []);
 
-  if (checkingStorage) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: "#fff",
-        }}
-      >
-        <ActivityIndicator size="large" color="#FFD700" />
-      </View>
-    );
+  if (!showWelcome) {
+    return null;
   }
 
-  if (!hasToken) {
-    return (
-      <View style={{ flex: 1 }}>
-        <WelcomeScreen />
-      </View>
-    );
-  }
-
-  return null;
+  return (
+    <View style={{ flex: 1 }}>
+      <WelcomeScreen />
+    </View>
+  );
 }

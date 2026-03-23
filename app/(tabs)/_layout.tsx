@@ -14,10 +14,13 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useColorScheme,
 } from "react-native";
 import { NetworkInfo } from "react-native-network-info";
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import CustomDialog from "../components/CustomDialog";
+import { darkTheme, lightTheme } from "../constants/colors";
+import type { AppTheme } from "../constants/colors";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -91,11 +94,13 @@ const ServiceItemButton = ({
   index,
   onPress,
   sheetVisible,
+  colors,
 }: {
   item: any;
   index: number;
   onPress: () => void;
   sheetVisible: boolean;
+  colors: AppTheme;
 }) => {
   const scale = useRef(new Animated.Value(0.6)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -167,21 +172,24 @@ const ServiceItemButton = ({
         onPressOut={handlePressOut}
         style={[
           styles.serviceItem,
-          item.disabled && styles.disabledServiceItem,
+          {
+            backgroundColor: item.disabled ? colors.chip : colors.inputBackground,
+            borderColor: colors.border,
+          },
         ]}
       >
         <View style={styles.serviceIconContainer}>
           <FontAwesome5
             name={item.icon}
             size={24}
-            color={item.disabled ? "#555" : item.color}
+            color={item.disabled ? colors.textMuted : item.color}
             solid
           />
         </View>
         <Text
           style={[
             styles.serviceItemText,
-            item.disabled && { color: "#555" },
+            { color: item.disabled ? colors.textMuted : item.color },
           ]}
         >
           {item.name}
@@ -192,7 +200,13 @@ const ServiceItemButton = ({
 };
 
 // ─── Center Tab Button (FAB style from old UI) ────────────────────────────────
-const CenterTabButton = ({ onPress }: { onPress: () => void }) => {
+const CenterTabButton = ({
+  onPress,
+  colors,
+}: {
+  onPress: () => void;
+  colors: AppTheme;
+}) => {
   const scale = useRef(new Animated.Value(1)).current;
 
   const handlePress = () => {
@@ -220,17 +234,31 @@ const CenterTabButton = ({ onPress }: { onPress: () => void }) => {
         onPress={handlePress}
         style={styles.fabButton}
       >
-        <Animated.View style={[styles.fabCircle, { transform: [{ scale }] }]}>
-          <FontAwesome5 name="th-large" size={22} color="#fff" />
+        <Animated.View
+          style={[
+            styles.fabCircle,
+            {
+              transform: [{ scale }],
+              backgroundColor: colors.primary,
+              borderColor: colors.surface,
+            },
+          ]}
+        >
+          <FontAwesome5 name="th-large" size={22} color={colors.onPrimary} />
         </Animated.View>
       </TouchableOpacity>
-      <Text style={styles.fabLabel}>Services</Text>
+      <Text style={[styles.fabLabel, { color: colors.primary }]}>Services</Text>
     </View>
   );
 };
 
 // ─── Main Tab Layout ──────────────────────────────────────────────────────────
 const TabLayout = () => {
+  const colorScheme = useColorScheme() ?? "light";
+  const colors = colorScheme === "dark" ? darkTheme : lightTheme;
+  const tabActiveColor = colors.primary;
+  const tabInactiveColor = colors.textMuted;
+
   const router = useRouter();
   const [isBottomSheetVisible, setIsBottomSheetVisible] = useState(false);
   const [sheetAnimVisible, setSheetAnimVisible] = useState(false);
@@ -239,7 +267,9 @@ const TabLayout = () => {
   const [dialogVisible, setDialogVisible] = useState(false);
   const [dialogTitle, setDialogTitle] = useState("");
   const [dialogMessage, setDialogMessage] = useState("");
-  const [dialogType, setDialogType] = useState("INFO");
+  const [dialogType, setDialogType] = useState<
+    "SUCCESS" | "DANGER" | "WARNING" | "INFO"
+  >("INFO");
 
   const openBottomSheet = () => {
     setIsBottomSheetVisible(true);
@@ -329,12 +359,14 @@ const TabLayout = () => {
   }, []);
 
   const serviceItems = [
-    { icon: "calendar-check", name: "Attend",   color: "#026D94", disabled: false },
-    { icon: "calendar-alt",   name: "Leave",    color: "#026D94", disabled: false },
-    { icon: "comment-alt",    name: "Messages", color: "#026D94", disabled: false },
-    { icon: "credit-card",    name: "Payslips", color: "#026D94", disabled: false },
-    { icon: "home",           name: "WFH",      color: "#026D94", disabled: false },
-    { icon: "question-circle",name: "Help",     color: "#aaa",    disabled: true  },
+    { icon: "calendar-check", name: "Attend",   color: colors.primary, disabled: false },
+    { icon: "calendar-alt",   name: "Leave",    color: colors.primary, disabled: false },
+    { icon: "comment-alt",    name: "Messages", color: colors.primary, disabled: false },
+    { icon: "credit-card",    name: "Payslips", color: colors.primary, disabled: false },
+    { icon: "home",           name: "WFH",      color: colors.primary, disabled: false },
+    { icon: "newspaper",      name: "Posts",    color: colors.primary, disabled: false },
+    { icon: "file-alt",       name: "Policies", color: colors.primary, disabled: false },
+    { icon: "question-circle",name: "Help",     color: colors.textMuted, disabled: true  },
   ];
 
   const handleServicePress = (item: any) => {
@@ -353,6 +385,8 @@ const TabLayout = () => {
       Payslips: "/(screen)/payslips",
       Messages: "/(screen)/chat",
       Holidays: "/(screen)/ViewAllHolidays",
+      Posts:    "/(screen)/posts",
+      Policies: "/(tabs)/services",
     };
     if (routes[item.name]) {
       setTimeout(() => router.push(routes[item.name] as any), 350);
@@ -361,7 +395,7 @@ const TabLayout = () => {
 
   return (
     <>
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* ── Bottom Sheet Modal ── */}
         <Modal
           visible={isBottomSheetVisible}
@@ -372,7 +406,10 @@ const TabLayout = () => {
         >
           <View style={styles.modalOverlay}>
             <Animated.View
-              style={[styles.backdrop, { opacity: backdropOpacity }]}
+              style={[
+                styles.backdrop,
+                { opacity: backdropOpacity, backgroundColor: colors.overlay },
+              ]}
             >
               <TouchableOpacity
                 style={{ flex: 1 }}
@@ -382,11 +419,18 @@ const TabLayout = () => {
             </Animated.View>
 
             <Animated.View
-              style={[styles.bottomSheet, { transform: [{ translateY }] }]}
+              style={[
+                styles.bottomSheet,
+                {
+                  transform: [{ translateY }],
+                  backgroundColor: colors.surface,
+                  shadowColor: colors.shadow,
+                },
+              ]}
               {...panResponder.panHandlers}
             >
               {/* Drag handle */}
-              <View style={styles.dragHandle} />
+              <View style={[styles.dragHandle, { backgroundColor: colors.primary }]} />
 
               <ScrollView
                 style={styles.sheetScrollView}
@@ -395,9 +439,9 @@ const TabLayout = () => {
                 <View style={styles.sheetContent}>
                   {/* Header */}
                   <View style={styles.sheetHeader}>
-                    <FontAwesome5 name="th-large" size={24} color="#026D94" />
-                    <Text style={styles.sheetTitle}>Services</Text>
-                    <Text style={styles.sheetDescription}>
+                    <FontAwesome5 name="th-large" size={24} color={colors.primary} />
+                    <Text style={[styles.sheetTitle, { color: colors.primary }]}>Services</Text>
+                    <Text style={[styles.sheetDescription, { color: colors.textSecondary }]}>
                       Select a service from the options below
                     </Text>
                   </View>
@@ -410,6 +454,7 @@ const TabLayout = () => {
                         item={item}
                         index={index}
                         sheetVisible={sheetAnimVisible}
+                        colors={colors}
                         onPress={() => handleServicePress(item)}
                       />
                     ))}
@@ -425,16 +470,16 @@ const TabLayout = () => {
           screenOptions={{
             headerShown: false,
             tabBarShowLabel: true,
-            tabBarActiveTintColor: "#026D94",
-            tabBarInactiveTintColor: "#b9b9b9",
+            tabBarActiveTintColor: tabActiveColor,
+            tabBarInactiveTintColor: tabInactiveColor,
             tabBarStyle: {
               height: verticalScale(64),
               paddingBottom: verticalScale(6),
               paddingTop: verticalScale(6),
               borderTopWidth: 1,
-              borderTopColor: "#E5E7EB",
-              backgroundColor: "#ffffff",
-              shadowColor: "#000",
+              borderTopColor: colors.border,
+              backgroundColor: colors.surface,
+              shadowColor: colors.shadow,
               shadowOpacity: 0.08,
               shadowRadius: 12,
               shadowOffset: { width: 0, height: -4 },
@@ -455,7 +500,7 @@ const TabLayout = () => {
                 <AnimatedTabIcon name="home" color={color} focused={focused} />
               ),
               tabBarLabel: ({ focused }) => (
-                <Text style={{ color: focused ? "#026D94" : "#b9b9b9", fontSize: moderateScale(12), fontWeight: "500" }}>
+                <Text style={{ color: focused ? tabActiveColor : tabInactiveColor, fontSize: moderateScale(12), fontWeight: "500" }}>
                   Home
                 </Text>
               ),
@@ -469,7 +514,7 @@ const TabLayout = () => {
                 <AnimatedTabIcon name="calendar-check" color={color} focused={focused} />
               ),
               tabBarLabel: ({ focused }) => (
-                <Text style={{ color: focused ? "#026D94" : "#b9b9b9", fontSize: moderateScale(12), fontWeight: "500" }}>
+                <Text style={{ color: focused ? tabActiveColor : tabInactiveColor, fontSize: moderateScale(12), fontWeight: "500" }}>
                   Attendance
                 </Text>
               ),
@@ -480,7 +525,7 @@ const TabLayout = () => {
             options={{
               title: "Services",
               tabBarButton: () => (
-                <CenterTabButton onPress={openBottomSheet} />
+                <CenterTabButton onPress={openBottomSheet} colors={colors} />
               ),
             }}
             listeners={{
@@ -498,7 +543,7 @@ const TabLayout = () => {
                 <AnimatedTabIcon name="calendar-minus" color={color} focused={focused} />
               ),
               tabBarLabel: ({ focused }) => (
-                <Text style={{ color: focused ? "#026D94" : "#b9b9b9", fontSize: moderateScale(12), fontWeight: "500" }}>
+                <Text style={{ color: focused ? tabActiveColor : tabInactiveColor, fontSize: moderateScale(12), fontWeight: "500" }}>
                   Leave
                 </Text>
               ),
@@ -512,7 +557,7 @@ const TabLayout = () => {
                 <AnimatedTabIcon name="clock" color={color} focused={focused} />
               ),
               tabBarLabel: ({ focused }) => (
-                <Text style={{ color: focused ? "#026D94" : "#b9b9b9", fontSize: moderateScale(12), fontWeight: "500" }}>
+                <Text style={{ color: focused ? tabActiveColor : tabInactiveColor, fontSize: moderateScale(12), fontWeight: "500" }}>
                   Time Slip
                 </Text>
               ),
@@ -544,7 +589,6 @@ const TabLayout = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#ffffff",
   },
 
   // ── Modal / Sheet ──
@@ -554,10 +598,8 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.5)",
   },
   bottomSheet: {
-    backgroundColor: "#ffffff",
     borderTopLeftRadius: moderateScale(20),
     borderTopRightRadius: moderateScale(20),
     height: "45%",
@@ -572,7 +614,6 @@ const styles = StyleSheet.create({
   dragHandle: {
     width: horizontalScale(40),
     height: verticalScale(4),
-    backgroundColor: "#026D94",
     borderRadius: 2,
     alignSelf: "center",
     marginVertical: verticalScale(10),
@@ -595,13 +636,11 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontSize: moderateScale(20),
     fontWeight: "bold",
-    color: "#026D94",
     marginTop: verticalScale(10),
     marginBottom: verticalScale(5),
   },
   sheetDescription: {
     fontSize: moderateScale(14),
-    color: "#666",
     textAlign: "center",
   },
 
@@ -617,22 +656,15 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#f8f9fa",
     borderRadius: moderateScale(12),
     borderWidth: 1,
-    borderColor: "#e9ecef",
     padding: moderateScale(10),
-  },
-  disabledServiceItem: {
-    backgroundColor: "#f8f9fa",
-    borderColor: "#d0d0d0",
   },
   serviceIconContainer: {
     marginBottom: verticalScale(8),
   },
   serviceItemText: {
     fontSize: moderateScale(11),
-    color: "#026D94",
     textAlign: "center",
     fontWeight: "500",
     lineHeight: moderateScale(14),
@@ -652,7 +684,6 @@ const styles = StyleSheet.create({
   fabCircle: {
     width: horizontalScale(56),
     height: horizontalScale(56),
-    backgroundColor: "#026D94",
     borderRadius: horizontalScale(28),
     justifyContent: "center",
     alignItems: "center",
@@ -661,13 +692,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
-    borderColor: "#fff",
     borderWidth: 3,
   },
   fabLabel: {
     marginTop: verticalScale(4),
     fontSize: moderateScale(11),
-    color: "#026D94",
     fontWeight: "500",
     textAlign: "center",
   },

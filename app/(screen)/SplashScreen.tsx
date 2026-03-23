@@ -1,12 +1,16 @@
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useRef, useState } from "react";
-import { StyleSheet, View, BackHandler, Image } from "react-native";
+import { StyleSheet, View, BackHandler, Image, useColorScheme } from "react-native";
+import { darkTheme, lightTheme } from "../constants/colors";
 
 export default function SplashScreen() {
   const router = useRouter();
   const ref = useRef(null);
   const [isVideoPlaying, setIsVideoPlaying] = useState(true);
+  const colorScheme = useColorScheme() ?? "light";
+  const isDarkMode = colorScheme === "dark";
+  const colors = isDarkMode ? darkTheme : lightTheme;
 
   useEffect(() => {
     // Disable Android back button during splash screen
@@ -36,9 +40,9 @@ export default function SplashScreen() {
   }, [router]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar
-        style="light"
+        style={isDarkMode ? "light" : "dark"}
         translucent={true}
         hidden={true} // Hide status bar completely during splash
       />
@@ -70,7 +74,6 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#000",
   },
   image: {
     width: "100%",

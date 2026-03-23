@@ -21,7 +21,7 @@ import { io, Socket } from "socket.io-client";
 import useMessageStore from "../../store/useMessageStore";
 
 const SOCKET_URL =
-  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinya-hrms-backend.onrender.com";
+  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinyahrms.duckdns.org";
 
 type MessageItem = {
   id: string;
@@ -39,6 +39,7 @@ type MessageItem = {
 const Message = () => {
   const colorScheme = useColorScheme() ?? "light";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
+  const isDarkMode = colorScheme === "dark";
   const navigation = useNavigation();
   const router = useRouter();
   const { accessToken } = useAuthStore();
@@ -108,7 +109,7 @@ const Message = () => {
     };
   }, [notifications]);
 
-  const handleRead = async (id) => {
+  const handleRead = async (id: string) => {
     const wasUnread = notifications.find((item) => item.id === id)?.isNew;
     setNotifications(prevNotifications =>
       prevNotifications.map(item =>
@@ -125,7 +126,7 @@ const Message = () => {
     }
   };
 
-  const handleMessagePress = (item) => {
+  const handleMessagePress = (item: MessageItem) => {
     handleRead(item.id);
     router.push({
       pathname: "/(screen)/MessagaDetails",
@@ -140,16 +141,16 @@ const Message = () => {
     fetchMessages().finally(() => setRefreshing(false));
   };
 
-  const getPriorityColor = (priority) => {
+  const getPriorityColor = (priority: MessageItem["priority"]) => {
     switch (priority) {
-      case "high": return "#F44336";
-      case "medium": return "#FF9800";
-      case "low": return "#4CAF50";
-      default: return "#0077B6";
+      case "high": return colors.red;
+      case "medium": return "#F59E0B";
+      case "low": return colors.green;
+      default: return colors.primary;
     }
   };
 
-  const getCategoryIcon = (category) => {
+  const getCategoryIcon = (category: MessageItem["category"]) => {
     switch (category) {
       case "work": return "briefcase";
       case "admin": return "file-text";
@@ -244,45 +245,66 @@ const Message = () => {
       
       {/* Search and Filter Card */}
       <View style={styles.cardWrapper}>
-        <View style={[styles.card, { backgroundColor: colors.white }]}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.white, borderColor: colors.border, borderWidth: 1 },
+          ]}
+        >
           {/* Search Section */}
           <View style={styles.searchSection}>
-            <View style={styles.searchWrapper}>
-              <Feather name="search" size={20} color="#666" style={styles.searchIcon} />
+            <View
+              style={[
+                styles.searchWrapper,
+                { backgroundColor: colors.inputBackground, borderColor: colors.border },
+              ]}
+            >
+              <Feather
+                name="search"
+                size={20}
+                color={colors.textMuted}
+                style={styles.searchIcon}
+              />
               <TextInput
                 value={search}
                 onChangeText={setSearch}
                 placeholder="Search messages..."
-                placeholderTextColor="#999"
-                style={styles.searchInput}
+                placeholderTextColor={colors.textMuted}
+                style={[styles.searchInput, { color: colors.text }]}
                 returnKeyType="search"
               />
               {search.length > 0 && (
                 <TouchableOpacity onPress={() => setSearch("")} style={styles.clearButton}>
-                  <Feather name="x" size={18} color="#666" />
+                  <Feather name="x" size={18} color={colors.textMuted} />
                 </TouchableOpacity>
               )}
             </View>
-            <TouchableOpacity style={styles.filterButton}>
-              <Feather name="filter" size={20} color="#005F90" />
+            <TouchableOpacity
+              style={[
+                styles.filterButton,
+                { backgroundColor: colors.inputBackground, borderColor: colors.border },
+              ]}
+            >
+              <Feather name="filter" size={20} color={colors.primary} />
             </TouchableOpacity>
           </View>
 
           {/* Filter Tabs */}
-          <View style={styles.filterBar}>
+          <View style={[styles.filterBar, { backgroundColor: colors.inputBackground }]}>
             {filters.map((filter) => (
               <TouchableOpacity
                 key={filter}
                 onPress={() => setSelectedFilter(filter)}
                 style={[
                   styles.filterItem,
-                  selectedFilter === filter && styles.filterItemActive,
+                  selectedFilter === filter && [styles.filterItemActive, { backgroundColor: colors.primary }],
                 ]}
               >
                 <Text
                   style={[
                     styles.filterText,
-                    selectedFilter === filter && styles.filterTextActive,
+                    { color: colors.textMuted },
+                    selectedFilter === filter && [styles.filterTextActive, { color: colors.onPrimary }],
                   ]}
                 >
                   {filter}
@@ -290,13 +312,15 @@ const Message = () => {
                 <View
                   style={[
                     styles.filterCount,
+                    { backgroundColor: colors.chip },
                     selectedFilter === filter && styles.filterCountActive,
                   ]}
                 >
                   <Text
                     style={[
                       styles.filterCountText,
-                      selectedFilter === filter && styles.filterCountTextActive,
+                      { color: colors.textSecondary },
+                      selectedFilter === filter && [styles.filterCountTextActive, { color: colors.onPrimary }],
                     ]}
                   >
                     {filterCounts[filter as keyof typeof filterCounts]}
@@ -311,13 +335,20 @@ const Message = () => {
       {/* Messages Section */}
       <View style={styles.messagesSection}>
         <View style={styles.messagesHeader}>
-          <Text style={styles.sectionTitle}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
             {search
               ? `Search Results (${filteredData.length})`
               : `${selectedFilter} Messages (${filteredData.length})`}
           </Text>
-          <View style={styles.unreadPill}>
-            <Text style={styles.unreadPillText}>{unreadCount} unread</Text>
+          <View
+            style={[
+              styles.unreadPill,
+              { backgroundColor: isDarkMode ? `${colors.primary}33` : `${colors.primary}1A` },
+            ]}
+          >
+            <Text style={[styles.unreadPillText, { color: colors.primary }]}>
+              {unreadCount} unread
+            </Text>
           </View>
         </View>
 
@@ -326,16 +357,21 @@ const Message = () => {
           contentContainerStyle={styles.scrollContent}
           style={styles.messagesList}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
           }
         >
           {filteredData.length === 0 ? (
             <View style={styles.emptyState}>
-              <Feather name="inbox" size={48} color="#ccc" />
-              <Text style={styles.emptyStateText}>
+              <Feather name="inbox" size={48} color={colors.textMuted} />
+              <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
                 {search ? "No messages found" : `No ${selectedFilter.toLowerCase()} messages`}
               </Text>
-              <Text style={styles.emptyStateSubtext}>
+              <Text style={[styles.emptyStateSubtext, { color: colors.textMuted }]}>
                 {search ? "Try adjusting your search terms" : "Try switching to a different filter"}
               </Text>
             </View>
@@ -345,29 +381,50 @@ const Message = () => {
                 key={item.id}
                 style={[
                   styles.notificationCard,
+                  { backgroundColor: colors.white, borderColor: colors.border },
                   item.isNew && styles.notificationCardUnread,
+                  item.isNew && {
+                    backgroundColor: colors.inputBackground,
+                    borderLeftColor: colors.primary,
+                  },
                   index === filteredData.length - 1 && styles.lastCard,
                 ]}
                 onPress={() => handleMessagePress(item)}
                 activeOpacity={0.7}
               >
                 <View style={styles.cardContent}>
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{item.initials}</Text>
-                    {item.isNew && <View style={styles.notificationBadge} />}
+                  <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+                    <Text style={[styles.avatarText, { color: colors.onPrimary }]}>
+                      {item.initials}
+                    </Text>
+                    {item.isNew && (
+                      <View
+                        style={[
+                          styles.notificationBadge,
+                          { borderColor: colors.white, backgroundColor: colors.red },
+                        ]}
+                      />
+                    )}
                   </View>
                   
                   <View style={styles.notificationContent}>
                     <View style={styles.titleRow}>
                       <View style={styles.titleContainer}>
-                        <Text style={[styles.title, item.isNew && styles.textUnread]}>
+                        <Text
+                          style={[
+                            styles.title,
+                            { color: colors.text },
+                            item.isNew && styles.textUnread,
+                            item.isNew && { color: colors.text },
+                          ]}
+                        >
                           {item.title}
                         </Text>
                         <View style={styles.metaInfo}>
                           <Feather 
                             name={getCategoryIcon(item.category)} 
                             size={12} 
-                            color="#666" 
+                            color={colors.textMuted} 
                           />
                           <View 
                             style={[
@@ -377,17 +434,36 @@ const Message = () => {
                           />
                         </View>
                       </View>
-                      <Text style={[styles.time, item.isNew && styles.timeUnread]}>
+                      <Text
+                        style={[
+                          styles.time,
+                          { color: colors.textMuted },
+                          item.isNew && styles.timeUnread,
+                          item.isNew && { color: colors.textSecondary },
+                        ]}
+                      >
                         {formatTime(new Date(item.sentAtMs))}
                       </Text>
                     </View>
                     
-                    <Text style={[styles.subtitle, item.isNew && styles.textUnread]}>
+                    <Text
+                      style={[
+                        styles.subtitle,
+                        { color: colors.primary },
+                        item.isNew && styles.textUnread,
+                        item.isNew && { color: colors.primary },
+                      ]}
+                    >
                       {item.subtitle}
                     </Text>
                     
                     <Text
-                      style={[styles.message, item.isNew && styles.messageUnread]}
+                      style={[
+                        styles.message,
+                        { color: colors.textSecondary },
+                        item.isNew && styles.messageUnread,
+                        item.isNew && { color: colors.text },
+                      ]}
                       numberOfLines={2}
                       ellipsizeMode="tail"
                     >
@@ -397,7 +473,7 @@ const Message = () => {
                 </View>
                 
                 <View style={styles.cardActions}>
-                  <Feather name="chevron-right" size={16} color="#ccc" />
+                  <Feather name="chevron-right" size={16} color={colors.textMuted} />
                 </View>
               </TouchableOpacity>
             ))
@@ -566,9 +642,9 @@ const styles = StyleSheet.create({
     borderLeftWidth: moderateScale(3),
     borderLeftColor: "#0EA5E9",
   },
-  // lastCard: {
-  //   marginBottom: verticalScale(20),
-  // },
+  lastCard: {
+    marginBottom: verticalScale(20),
+  },
   cardContent: {
     flex: 1,
     flexDirection: "row",

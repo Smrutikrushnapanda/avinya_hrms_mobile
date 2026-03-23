@@ -3,7 +3,7 @@ import { router } from "expo-router";
 
 const getAuthStore = () => require("../store/useUserStore").default;
 
-const cloudFallbackURL = "https://avinya-hrms-backend.onrender.com";
+const cloudFallbackURL = "https://avinyahrms.duckdns.org";
 const localFallbackURL = "http://10.0.2.2:8080";
 const envOverrideURL =
   process.env.EXPO_PUBLIC_API_BASE_URL || process.env.EXPO_PUBLIC_LOCAL_API_BASE_URL;
@@ -134,7 +134,7 @@ export const logAttendance = async (data: {
     try {
       const networkTest = await api.get("/");
       console.log("✅ Network test successful");
-    } catch (networkError) {
+    } catch (networkError: any) {
       console.error("❌ Network test failed:", networkError.message);
       throw new Error("Network connectivity issue. Please check your internet connection.");
     }
@@ -216,6 +216,11 @@ export const logAttendance = async (data: {
   }
 };
 
+// ✅ Attendance Settings - Org level
+export const getAttendanceSettings = (organizationId: string) => {
+  return api.get("/attendance/settings", { params: { organizationId } });
+};
+
 // ✅ Get Today's Attendance Logs - Returns all logs submitted by the user today
 export const todayLogs = (organizationId?: string, userId?: string) => {
   const { user } = getAuthStore().getState();
@@ -233,6 +238,25 @@ export const todayLogs = (organizationId?: string, userId?: string) => {
     },
   });
 };
+
+export const toggleBreakStatus = (data: {
+  organizationId: string;
+  userId: string;
+  source?: 'mobile' | 'web' | 'biometric' | 'wifi' | 'manual';
+  timestamp?: string;
+  latitude?: number;
+  longitude?: number;
+  locationAddress?: string;
+  wifiSsid?: string;
+  wifiBssid?: string;
+  deviceInfo?: string;
+}) => api.post('/attendance/break/toggle', data);
+
+export const getBreakStatus = (organizationId: string, userId: string) =>
+  api.get('/attendance/break/status', { params: { organizationId, userId } });
+
+export const getLiveBreakOverview = (organizationId: string) =>
+  api.get('/attendance/break/live', { params: { organizationId } });
 
 // ✅ Get Monthly Attendance - Returns all attendance logs for a specific month and year
 export const monthlyAttendance = (userId: string, month: number, year: number, organizationId: string) => {
@@ -404,5 +428,112 @@ export const sendChatMessage = (conversationId: string, data: any) =>
   });
 export const getEmployees = (organizationId: string) =>
   api.get("/employees", { params: { organizationId } });
+
+// 📋 Company Policy APIs
+export const getPolicies = () => api.get("/policy");
+
+// 📝 Posts APIs
+export const getLatestPosts = (params?: { organizationId?: string; limit?: number }) => {
+  const { user } = getAuthStore().getState();
+  const organizationId = params?.organizationId ?? user?.organizationId;
+  return api.get("/posts/latest", {
+    params: {
+      organizationId,
+      limit: params?.limit ?? 50,
+    },
+  });
+};
+
+export const likePost = (postId: string, userId: string) => {
+  return api.post(`/posts/${postId}/like`, { userId });
+};
+
+export const unlikePost = (postId: string, userId: string) => {
+  return api.delete(`/posts/${postId}/like`, { params: { userId } });
+};
+
+export const commentPost = (postId: string, data: { userId: string; content: string }) => {
+  return api.post(`/posts/${postId}/comments`, data);
+};
+
+export const getPostComments = (postId: string) => {
+  return api.get(`/posts/${postId}/comments`);
+};
+
+// ☁️ Cloudinary Image Upload API
+export const uploadImageToCloudinary = async (imageUri: string): Promise<{ url: string; public_id: string }> => {
+  try {
+    console.log("=== uploadImageToCloudinary API Call Started ===");
+
+    if (!imageUri || imageUri.trim() === '') {
+      throw new Error("Image URI is required but missing");
+    }
+
+    console.log("Image URI:", imageUri.substring(0, 50) + "...");
+
+    // Create FormData for file upload
+    const formData = new FormData();
+
+    const imageFile = {
+      uri: imageUri,
+      type: 'image/jpeg',
+      name: 'employee_photo.jpg',
+    };
+
+    console.log("📸 Image file object:", {
+      uri: imageFile.uri ? `${imageFile.uri.substring(0, 50)}...` : "❌ UNDEFINED",
+      type: imageFile.type,
+      name: imageFile.name,
+    });
+
+    if (!imageFile.uri) {
+      throw new Error("Image file URI became undefined during FormData creation");
+    }
+
+    formData.append('file', imageFile as any);
+
+    console.log("✅ FormData created successfully");
+
+    const config = {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Accept': 'application/json',
+      },
+      timeout: 60000,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+    };
+
+    console.log("🚀 Making API request...");
+    console.log("📍 URL:", `${apiBaseURL}/upload/image`);
+
+    const response = await api.post("/upload/image", formData, config);
+
+    console.log("=== ✅ uploadImageToCloudinary API Call Successful ===");
+    console.log("Response:", response.data);
+
+    return response.data;
+
+  } catch (error: any) {
+    console.error("=== ❌ uploadImageToCloudinary API Call Failed ===");
+    console.error("Error details:", {
+      message: error.message,
+      code: error.code,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+    });
+
+    if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
+      throw new Error('Network connection failed. Please check your internet connection and try again.');
+    } else if (error.code === 'ECONNABORTED') {
+      throw new Error('Request timeout. Please try again with a better connection.');
+    } else if (error.message.includes('Image URI')) {
+      throw new Error('Image capture failed. Please try taking the photo again.');
+    } else {
+      throw error;
+    }
+  }
+};
 
 export default api;

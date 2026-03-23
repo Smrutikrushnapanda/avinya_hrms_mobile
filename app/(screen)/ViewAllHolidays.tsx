@@ -165,9 +165,9 @@ const ViewAllHolidaysSkeleton = ({ colors }) => (
 );
 
 const ViewAllHolidays = () => {
-  const systemColorScheme = useColorScheme() ?? "light";
-  const [isDarkMode, setIsDarkMode] = useState(systemColorScheme === "dark");
-  const colors = isDarkMode ? darkTheme : lightTheme;
+  const colorScheme = useColorScheme() ?? "light";
+  const colors = colorScheme === "dark" ? darkTheme : lightTheme;
+  const isDarkMode = colorScheme === "dark";
 
   const [holidays, setHolidays] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -325,7 +325,12 @@ const ViewAllHolidays = () => {
     ];
     return (
       <View style={[styles.tabContainer, { backgroundColor: colors.background }]}>
-        <View style={[styles.tabBar, { backgroundColor: colors.white }]}>
+        <View
+          style={[
+            styles.tabBar,
+            { backgroundColor: colors.white, borderColor: colors.border },
+          ]}
+        >
           {tabs.map((tab) => {
             const isActive = activeTab === tab.key;
             const count = getTabCount(tab.key);
@@ -343,7 +348,7 @@ const ViewAllHolidays = () => {
                   <Text
                     style={[
                       styles.tabText,
-                      { color: isActive ? "#fff" : colors.grey },
+                      { color: isActive ? colors.onPrimary : colors.grey },
                       isActive && styles.tabTextActive,
                     ]}
                   >
@@ -365,7 +370,12 @@ const ViewAllHolidays = () => {
     const isPast = new Date(item.date) < new Date();
 
     return (
-      <View style={[styles.holidayCard, { backgroundColor: colors.white }]}>
+      <View
+        style={[
+          styles.holidayCard,
+          { backgroundColor: colors.white, borderColor: colors.border, borderWidth: 1 },
+        ]}
+      >
         {/* Left Section: Date */}
         <View style={styles.dateSection}>
           <View
@@ -373,6 +383,7 @@ const ViewAllHolidays = () => {
               styles.dateBox,
               {
                 backgroundColor: item.isOptional ? "#FF8C00" : colors.primary,
+                borderRightColor: isDarkMode ? `${colors.border}99` : "rgba(255, 255, 255, 0.3)",
               },
             ]}
           >
@@ -391,7 +402,15 @@ const ViewAllHolidays = () => {
             <View
               style={[
                 styles.typeBadge,
-                { backgroundColor: item.isOptional ? "#FFF3E0" : "#E3F2FD" }
+                {
+                  backgroundColor: item.isOptional
+                    ? isDarkMode
+                      ? "rgba(255,140,0,0.18)"
+                      : "#FFF3E0"
+                    : isDarkMode
+                    ? "rgba(33,150,243,0.2)"
+                    : "#E3F2FD",
+                },
               ]}
             >
               <Ionicons
@@ -422,9 +441,16 @@ const ViewAllHolidays = () => {
             </View>
           )}
           {isPast && (
-            <View style={[styles.countdownContainer, { backgroundColor: "rgba(150, 150, 150, 0.1)" }]}>
-              <Ionicons name="checkmark-circle-outline" size={12} color="#666" />
-              <Text style={[styles.daysRemaining, { color: "#666" }]}>{daysRemaining}</Text>
+            <View
+              style={[
+                styles.countdownContainer,
+                { backgroundColor: isDarkMode ? `${colors.textMuted}33` : "rgba(150, 150, 150, 0.1)" },
+              ]}
+            >
+              <Ionicons name="checkmark-circle-outline" size={12} color={colors.textMuted} />
+              <Text style={[styles.daysRemaining, { color: colors.textMuted }]}>
+                {daysRemaining}
+              </Text>
             </View>
           )}
         </View>
@@ -439,7 +465,12 @@ const ViewAllHolidays = () => {
     const restrictedCount = holidays.filter((h) => h.isOptional).length;
     const publicCount = totalCount - restrictedCount;
     return (
-      <View style={[styles.statsContainer, { backgroundColor: colors.white }]}>
+      <View
+        style={[
+          styles.statsContainer,
+          { backgroundColor: colors.white, borderColor: colors.border, borderWidth: 1 },
+        ]}
+      >
         <Text style={[styles.statsTitle, { color: colors.text }]}>
           Holiday Statistics
         </Text>
@@ -475,7 +506,7 @@ const ViewAllHolidays = () => {
         <TabSelector />
         {filteredHolidays.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Ionicons name="calendar-outline" size={60} color="#ccc" />
+            <Ionicons name="calendar-outline" size={60} color={colors.textMuted} />
             <Text style={[styles.emptyText, { color: colors.grey }]}>
               {activeTab === "Upcoming"
                 ? "No upcoming holidays"

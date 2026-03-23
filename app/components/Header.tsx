@@ -17,11 +17,15 @@ import { io, Socket } from "socket.io-client";
 import HeaderBackground from "./HeaderBackground";
 
 const SOCKET_URL =
-  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinya-hrms-backend.onrender.com";
+  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinyahrms.duckdns.org";
 
-const Header = ({ title = "" }) => {
+const Header = ({ title = "", compact = false }: { title?: string; compact?: boolean }) => {
   const colorScheme = useColorScheme() ?? "light";
+  const isDarkMode = colorScheme === "dark";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
+  const controlBg = isDarkMode ? "rgba(9,15,27,0.82)" : "rgba(255,255,255,0.92)";
+  const controlBorder = isDarkMode ? colors.border : "rgba(255,255,255,0.35)";
+  const controlIconColor = isDarkMode ? colors.text : "#0b4f73";
   const navigation = useNavigation();
   const router = useRouter();
   const { accessToken } = useAuthStore();
@@ -66,23 +70,32 @@ const Header = ({ title = "" }) => {
   return (
     <View style={[styles.container, { backgroundColor: colors.primary }]}>
       <HeaderBackground />
-      <View style={styles.header}>
+      <View style={[styles.header, compact && styles.headerCompact]}>
         <View style={styles.headerContent}>
           {/* Back Button */}
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backButton}
           >
-            <View style={styles.backCircle}>
-              <Ionicons name="arrow-back" size={20} color="#0b4f73" />
+            <View
+              style={[
+                styles.backCircle,
+                { backgroundColor: controlBg, borderColor: controlBorder },
+              ]}
+            >
+              <Ionicons name="arrow-back" size={20} color={controlIconColor} />
             </View>
           </TouchableOpacity>
 
           {/* Title (moved next to back icon) */}
           <View style={styles.titleWrapper}>
-            <View style={styles.titlePill}>
+            <View style={[styles.titlePill, compact && styles.titlePillCompact]}>
               <Text
-                style={[styles.titleText, { color: "#fff" }]}
+                style={[
+                  styles.titleText,
+                  compact && styles.titleTextCompact,
+                  { color: colors.onPrimary },
+                ]}
                 numberOfLines={1}
               >
                 {title}
@@ -94,10 +107,15 @@ const Header = ({ title = "" }) => {
           <View style={styles.rightSection}>
             <View style={styles.notificationSection}>
               <TouchableOpacity onPress={() => router.push("/(screen)/message")}>
-                <View style={styles.notificationIcon}>
-                  <Ionicons name="notifications" size={20} color="#1e7ba8" />
+                <View
+                  style={[
+                    styles.notificationIcon,
+                    { backgroundColor: controlBg, borderColor: controlBorder },
+                  ]}
+                >
+                  <Ionicons name="notifications" size={20} color={colors.primary} />
                   {unreadCount > 0 && (
-                    <View style={styles.notificationBadge}>
+                    <View style={[styles.notificationBadge, { backgroundColor: colors.red }]}>
                       <Text style={styles.badgeText}>
                         {unreadCount > 99 ? "99+" : String(unreadCount)}
                       </Text>
@@ -124,6 +142,11 @@ const styles = StyleSheet.create({
     paddingBottom: 110,
     paddingHorizontal: 20,
   },
+  headerCompact: {
+    paddingTop: 34,
+    paddingBottom: 72,
+    paddingHorizontal: 16,
+  },
   headerContent: {
     flexDirection: "row",
     alignItems: "center",
@@ -137,7 +160,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.92)",
+    borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -153,10 +176,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.25)",
   },
+  titlePillCompact: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 14,
+  },
   titleText: {
     fontSize: 22,
     fontWeight: "700",
     letterSpacing: 0.3,
+  },
+  titleTextCompact: {
+    fontSize: 18,
   },
   rightSection: {
     marginLeft: "auto",
@@ -171,7 +202,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.92)",
+    borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
     position: "relative",
@@ -183,7 +214,6 @@ const styles = StyleSheet.create({
     minWidth: 14,
     height: 14,
     borderRadius: 8,
-    backgroundColor: "#ff4444",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 4,

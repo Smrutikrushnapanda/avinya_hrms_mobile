@@ -17,7 +17,7 @@ const Forgetpassword = () => {
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.white }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Background Design */}
       <View style={styles.backgroundContainer}>
         <View
@@ -33,7 +33,7 @@ const Forgetpassword = () => {
 
       {/* Logo/Icon Container */}
       <View style={styles.logoContainer}>
-        <View style={[styles.iconContainer, { backgroundColor: colors.white }]}>
+        <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
           <Ionicons name="person-outline" size={24} color={colors.primary} />
         </View>
       </View>
@@ -51,7 +51,7 @@ const Forgetpassword = () => {
               styles.input,
               {
                 borderColor: colors.primary,
-                backgroundColor: colors.white,
+                backgroundColor: colors.surface,
                 color: colors.text,
               },
             ]}
@@ -64,7 +64,7 @@ const Forgetpassword = () => {
         <TouchableOpacity
           style={[styles.loginButton, { backgroundColor: colors.primary }]}
         >
-          <Text style={[styles.loginButtonText, { color: colors.white }]}>
+          <Text style={[styles.loginButtonText, { color: colors.onPrimary }]}>
             Log In
           </Text>
         </TouchableOpacity>
@@ -76,7 +76,6 @@ const Forgetpassword = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "red",
   },
   backgroundContainer: {
     position: "absolute",

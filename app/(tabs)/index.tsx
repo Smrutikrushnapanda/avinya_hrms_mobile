@@ -9,7 +9,7 @@ import * as ImageManipulator from "expo-image-manipulator";
 import * as Location from "expo-location";
 import * as Network from "expo-network";
 import { useFocusEffect, useNavigation, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
@@ -27,7 +27,7 @@ import {
   useColorScheme,
 } from "react-native";
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
-import { getCurrentTime, getOrganization, logAttendance, todayLogs } from "../../api/api";
+import { getCurrentTime, getOrganization, logAttendance, todayLogs, toggleBreakStatus } from "../../api/api";
 import { CACHE_TTL, withCache, invalidateCache } from "utils/apiCache";
 import useAuthStore from "../../store/useUserStore";
 import CustomDialog from "../components/CustomDialog";
@@ -38,6 +38,7 @@ import { darkTheme, lightTheme } from "../constants/colors";
 const Index = () => {
   const colorScheme = useColorScheme() || "light";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
+  const isDarkMode = colorScheme === "dark";
   const route = useRouter();
   const navigation = useNavigation();
   const cameraRef = useRef<CameraView>(null);
@@ -46,6 +47,7 @@ const Index = () => {
   const [showCamera, setShowCamera] = useState<boolean>(false);
   const [cameraFacing, setCameraFacing] = useState<"front" | "back">("front");
   const [isCheckedIn, setIsCheckedIn] = useState<boolean>(false);
+  const [isOnBreak, setIsOnBreak] = useState<boolean>(false);
   const [checkoutMode, setCheckoutMode] = useState<boolean>(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [showInfo, setShowInfo] = useState<boolean>(false);
@@ -84,6 +86,7 @@ const Index = () => {
   const [initializationRetryCount, setInitializationRetryCount] = useState<number>(0);
   const [workingHours, setWorkingHours] = useState<string>("0:00:00 hours");
   const [showMessageModal, setShowMessageModal] = useState<boolean>(false);
+  const [breakLoading, setBreakLoading] = useState<boolean>(false);
   const [validationRules, setValidationRules] = useState<{
     enableWifiValidation: boolean;
     enableGPSValidation: boolean;
@@ -310,6 +313,23 @@ const Index = () => {
         setAttendanceLogs(response.data.logs);
         setPunchInTime(response.data.punchInTime);
         setLastPunch(response.data.lastPunch);
+        if (typeof response.data.isOnBreak === "boolean") {
+          setIsOnBreak(response.data.isOnBreak);
+        } else {
+          const sortedLogs = [...response.data.logs].sort(
+            (a: any, b: any) =>
+              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+          );
+          let derivedBreakState = false;
+          for (const log of sortedLogs) {
+            if (log.type === "check-out" || log.type === "break-end") {
+              derivedBreakState = false;
+            } else if (log.type === "break-start") {
+              derivedBreakState = true;
+            }
+          }
+          setIsOnBreak(derivedBreakState);
+        }
         const today = new Date().toISOString().split("T")[0];
         const hasCheckInToday =
           response.data.punchInTime &&
@@ -324,6 +344,7 @@ const Index = () => {
         console.log("🔄 isCheckedIn set to:", isCurrentlyCheckedIn);
       } else {
         console.warn("⚠️ No logs found in response:", response.data);
+        setIsOnBreak(false);
       }
     } catch (error) {
       console.log("❌ Failed to fetch attendance logs:", error);
@@ -745,12 +766,30 @@ const Index = () => {
     return () => clearInterval(interval);
   }, [punchInTime, lastPunch, attendanceLogs]);
 
+  const sharedTabBarStyle = useMemo(
+    () => ({
+      height: verticalScale(64),
+      paddingBottom: verticalScale(6),
+      paddingTop: verticalScale(6),
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      backgroundColor: colors.surface,
+      shadowColor: colors.shadow,
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: -4 } as const,
+      elevation: 12,
+    }),
+    [colors.border, colors.shadow, colors.surface]
+  );
+
   useFocusEffect(
     useCallback(() => {
+      const shouldHideTabBar = showCamera || previewImage;
       navigation.setOptions({
-        tabBarStyle: {
-          display: showCamera || previewImage ? "none" : "flex",
-        },
+        tabBarStyle: shouldHideTabBar
+          ? { ...sharedTabBarStyle, display: "none" as const }
+          : sharedTabBarStyle,
       });
       const backHandler = BackHandler.addEventListener("hardwareBackPress", () => {
         if (showCamera || previewImage) {
@@ -766,8 +805,11 @@ const Index = () => {
         return false;
       });
 
-      return () => backHandler.remove();
-    }, [showCamera, previewImage])
+      return () => {
+        backHandler.remove();
+        navigation.setOptions({ tabBarStyle: sharedTabBarStyle });
+      };
+    }, [navigation, previewImage, sharedTabBarStyle, showCamera])
   );
 
   const getTimePeriod = (hour: number): string => {
@@ -839,6 +881,36 @@ const Index = () => {
     } catch (error) {
       console.error("❌ Error in handleCheckOut:", error);
       showDialog("DANGER", "Error", "Failed to open camera. Please try again.");
+    }
+  };
+
+  const handleBreakToggle = async (): Promise<void> => {
+    if (!orgId || !userId || breakLoading || !hasCheckInToday) return;
+    try {
+      setBreakLoading(true);
+      const timeRes = await getCurrentTime();
+      const timestamp = timeRes?.data?.isoTime || new Date().toISOString();
+      const deviceInfo = `${Platform.OS} ${Platform.Version}`;
+      const response = await toggleBreakStatus({
+        organizationId: orgId,
+        userId: userId,
+        source: "mobile",
+        timestamp,
+        latitude: cachedLocation?.latitude,
+        longitude: cachedLocation?.longitude,
+        wifiSsid: validationRules.enableWifiValidation ? cachedWifi?.ssid : undefined,
+        wifiBssid: validationRules.enableWifiValidation ? cachedWifi?.bssid : undefined,
+        deviceInfo,
+      });
+      setIsOnBreak(Boolean(response?.data?.isOnBreak));
+      invalidateCache(`today_logs_${orgId}_${userId}`);
+      await fetchAttendanceLogs(true);
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message || "Failed to update break status. Please try again.";
+      showDialog("DANGER", "Break Update Failed", message);
+    } finally {
+      setBreakLoading(false);
     }
   };
 
@@ -1380,45 +1452,85 @@ const Index = () => {
             <Text style={[styles.viewall, { color: colors.primary }]}>View all</Text>
           </TouchableOpacity>
         </View>
-        <View style={styles.attendanceCard}>
+        <View
+          style={[
+            styles.attendanceCard,
+            { backgroundColor: colors.white, borderColor: colors.border },
+          ]}
+        >
           <View style={styles.iconContainer}>
-            <View style={[styles.iconBox, { backgroundColor: "#E4F1FF" }]}>
+            <View
+              style={[
+                styles.iconBox,
+                { backgroundColor: isDarkMode ? "rgba(59,130,246,0.2)" : "#E4F1FF" },
+              ]}
+            >
               <Ionicons name="arrow-forward" size={20} color="#1e7ba8" />
             </View>
           </View>
           <View style={styles.infoContainer}>
             <Text style={[styles.title, { color: colors.text }]}>Punch In</Text>
-            <Text style={styles.subtitle}>{formatDate(punchInTime)}</Text>
+            <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+              {formatDate(punchInTime)}
+            </Text>
           </View>
           <View style={styles.timeContainer}>
             <Text style={[styles.time, { color: colors.text }]}>{formatTime(punchInTime)}</Text>
-            <Text style={styles.status}>{punchInTime ? "Completed" : "Not done"}</Text>
+            <Text style={[styles.status, { color: colors.textMuted }]}>
+              {punchInTime ? "Completed" : "Not done"}
+            </Text>
           </View>
         </View>
-        <View style={styles.attendanceCard}>
+        <View
+          style={[
+            styles.attendanceCard,
+            { backgroundColor: colors.white, borderColor: colors.border },
+          ]}
+        >
           <View style={styles.iconContainer}>
-            <View style={[styles.iconBox, { backgroundColor: "#ffe4e4ff" }]}>
+            <View
+              style={[
+                styles.iconBox,
+                { backgroundColor: isDarkMode ? "rgba(248,113,113,0.2)" : "#FFE4E4" },
+              ]}
+            >
               <Ionicons name="arrow-back" size={20} color="#a81e1eff" />
             </View>
           </View>
           <View style={styles.infoContainer}>
             <Text style={[styles.title, { color: colors.text }]}>Last Punch</Text>
-            <Text style={styles.subtitle}>{formatDate(lastPunch)}</Text>
+            <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+              {formatDate(lastPunch)}
+            </Text>
           </View>
           <View style={styles.timeContainer}>
             <Text style={[styles.time, { color: colors.text }]}>{formatTime(lastPunch)}</Text>
-            <Text style={styles.status}>{lastPunch ? "Completed" : "Not done"}</Text>
+            <Text style={[styles.status, { color: colors.textMuted }]}>
+              {lastPunch ? "Completed" : "Not done"}
+            </Text>
           </View>
         </View>
-        <View style={styles.attendanceCard}>
+        <View
+          style={[
+            styles.attendanceCard,
+            { backgroundColor: colors.white, borderColor: colors.border },
+          ]}
+        >
           <View style={styles.iconContainer}>
-            <View style={[styles.iconBox, { backgroundColor: "#C2FFC7" }]}>
+            <View
+              style={[
+                styles.iconBox,
+                { backgroundColor: isDarkMode ? "rgba(34,197,94,0.2)" : "#C2FFC7" },
+              ]}
+            >
               <MaterialIcons name="laptop" size={20} color="#399918" />
             </View>
           </View>
           <View style={styles.infoContainer}>
             <Text style={[styles.title, { color: colors.text }]}>Working Hours</Text>
-            <Text style={styles.subtitle}>{punchInTime ? formatDate(punchInTime) : formatDate(null)}</Text>
+            <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+              {punchInTime ? formatDate(punchInTime) : formatDate(null)}
+            </Text>
           </View>
           <View style={styles.timeContainer}>
             <Text style={[styles.time, { color: colors.text }]}>{workingHours}</Text>
@@ -1429,6 +1541,62 @@ const Index = () => {
                 <Ionicons name="refresh" size={16} color={colors.primary} />
               )}
             </TouchableOpacity>
+          </View>
+        </View>
+        <View
+          style={[
+            styles.attendanceCard,
+            { backgroundColor: colors.white, borderColor: colors.border },
+          ]}
+        >
+          <View style={styles.iconContainer}>
+            <View
+              style={[
+                styles.iconBox,
+                {
+                  backgroundColor: isOnBreak
+                    ? isDarkMode
+                      ? "rgba(245,158,11,0.2)"
+                      : "#FEF3C7"
+                    : isDarkMode
+                    ? "rgba(34,197,94,0.2)"
+                    : "#DCFCE7",
+                },
+              ]}
+            >
+              <MaterialIcons
+                name="free-breakfast"
+                size={20}
+                color={isOnBreak ? "#d97706" : "#16a34a"}
+              />
+            </View>
+          </View>
+          <View style={styles.infoContainer}>
+            <Text style={[styles.title, { color: colors.text }]}>Break</Text>
+            <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+              {isOnBreak ? "Currently on break" : "Available for work"}
+            </Text>
+          </View>
+          <View style={styles.timeContainer}>
+            <TouchableOpacity
+              style={[
+                styles.breakButton,
+                { backgroundColor: isOnBreak ? "#f59e0b" : "#22c55e" },
+              ]}
+              disabled={!hasCheckInToday || breakLoading}
+              onPress={handleBreakToggle}
+            >
+              {breakLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.breakButtonText}>
+                  {isOnBreak ? "End Break" : "Start Break"}
+                </Text>
+              )}
+            </TouchableOpacity>
+            {!hasCheckInToday && (
+              <Text style={[styles.status, { color: colors.textMuted }]}>Check in first</Text>
+            )}
           </View>
         </View>
         <View>
@@ -1505,11 +1673,11 @@ const styles = StyleSheet.create({
   attendanceCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
     borderRadius: moderateScale(12),
     padding: moderateScale(12),
     marginHorizontal: horizontalScale(20),
     marginTop: verticalScale(12),
+    borderWidth: 1,
     elevation: 3,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -1530,6 +1698,18 @@ const styles = StyleSheet.create({
   timeContainer: { alignItems: "flex-end" },
   time: { fontSize: moderateScale(16), fontWeight: "600", color: "#1e7ba8" },
   status: { fontSize: moderateScale(10), color: "#999", marginTop: verticalScale(2) },
+  breakButton: {
+    borderRadius: moderateScale(8),
+    paddingVertical: verticalScale(6),
+    paddingHorizontal: horizontalScale(10),
+    minWidth: horizontalScale(90),
+    alignItems: "center",
+  },
+  breakButtonText: {
+    color: "#fff",
+    fontSize: moderateScale(11),
+    fontWeight: "700",
+  },
   captureButtonDisabled: {
     backgroundColor: "rgba(255,255,255,0.1)",
     borderColor: "#ccc",

@@ -7,18 +7,21 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Appearance,
   Dimensions,
   Image,
   Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
   useColorScheme,
 } from "react-native";
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
+import { THEME_PREFERENCE_KEY, ThemePreference } from "utils/themePreference";
 import { logout as apiLogout, getEmployeeProfile } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
 import CustomDialog from "../components/CustomDialog";
@@ -83,6 +86,12 @@ interface Theme {
   text: string;
   grey: string;
   primary: string;
+  border: string;
+  textSecondary: string;
+  inputBackground: string;
+  onPrimary: string;
+  green: string;
+  red: string;
 }
 
 interface ActionButtonProps {
@@ -96,7 +105,7 @@ interface ActionButtonProps {
 interface InfoItemProps {
   icon: string;
   label: string;
-  value?: string | JSX.Element;
+  value?: React.ReactNode;
   onPress?: () => void;
   showChevron?: boolean;
 }
@@ -113,6 +122,20 @@ const STORAGE_KEYS = {
 
 // Cache duration (24 hours in milliseconds)
 const CACHE_DURATION = 24 * 60 * 60 * 1000;
+
+// All non-auth cache keys across the app — safe to clear when storage is full
+const CLEARABLE_CACHE_KEYS = [
+  "profile_data",
+  "profile_timestamp",
+  "local_profile_photo",
+  "cachedWifi",
+  "cachedLocation",
+  "lastShownDate",
+  "lastNoticeId",
+];
+
+// Module-level flag: disable cache writes for this session if storage is unrecoverable
+let profileCacheDisabled = false;
 
 // Accordion component defined OUTSIDE ProfilePage to avoid re-creation on every render
 const AccordionSection: React.FC<{
@@ -152,10 +175,8 @@ const AccordionSection: React.FC<{
 };
 
 const ProfilePage: React.FC = () => {
-  const systemColorScheme = useColorScheme() ?? "light";
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(
-    systemColorScheme === "dark"
-  );
+  const colorScheme = useColorScheme() ?? "light";
+  const isDarkMode = colorScheme === "dark";
   const colors: Theme = isDarkMode ? darkTheme : lightTheme;
 
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
@@ -279,14 +300,41 @@ const ProfilePage: React.FC = () => {
 
   // Save profile data to AsyncStorage
   const saveProfileToCache = async (data: ProfileData): Promise<void> => {
+    if (profileCacheDisabled) return;
+
     try {
+      // Avoid caching huge data URIs that can bloat storage
+      const sanitized: ProfileData = { ...data };
+      if (sanitized.photoUrl && sanitized.photoUrl.startsWith("data:")) {
+        delete sanitized.photoUrl;
+      }
+      if (sanitized.passportPhotoUrl && sanitized.passportPhotoUrl.startsWith("data:")) {
+        delete sanitized.passportPhotoUrl;
+      }
+
       await AsyncStorage.multiSet([
-        [STORAGE_KEYS.PROFILE_DATA, JSON.stringify(data)],
+        [STORAGE_KEYS.PROFILE_DATA, JSON.stringify(sanitized)],
         [STORAGE_KEYS.PROFILE_TIMESTAMP, Date.now().toString()],
       ]);
       console.log("Profile data cached successfully");
-    } catch (error) {
-      console.error("Error saving profile to cache:", error);
+    } catch (error: any) {
+      const msg = String(error?.message || error);
+      if (msg.includes("SQLITE_FULL") || msg.includes("database or disk is full")) {
+        // Free space by clearing all non-auth cache keys, then retry once
+        try {
+          await AsyncStorage.multiRemove(CLEARABLE_CACHE_KEYS);
+          console.warn("Cleared app cache due to SQLITE_FULL, retrying profile save...");
+          await AsyncStorage.multiSet([
+            [STORAGE_KEYS.PROFILE_DATA, JSON.stringify({ ...data, photoUrl: undefined, passportPhotoUrl: undefined })],
+            [STORAGE_KEYS.PROFILE_TIMESTAMP, Date.now().toString()],
+          ]);
+          console.log("Profile data cached successfully after recovery.");
+        } catch {
+          // Storage is unrecoverable this session — skip silently
+          profileCacheDisabled = true;
+          console.warn("Profile caching disabled for this session (storage full).");
+        }
+      }
     }
   };
 
@@ -304,7 +352,7 @@ const ProfilePage: React.FC = () => {
   };
 
   const fetchProfileData = async (isRefresh: boolean = false): Promise<void> => {
-    console.log("User data from store:", user);
+    // console.log("User data from store:", user);
     if (!user?.userId) {
       console.log("No user ID available, skipping profile fetch");
       setIsLoadingProfile(false);
@@ -323,17 +371,38 @@ const ProfilePage: React.FC = () => {
         throw new Error("No data returned from API");
       }
 
-      setProfileData(response.data);
+      const normalized = {
+        ...response.data,
+        photoUrl:
+          response.data?.passportPhotoUrl ||
+          response.data?.photoUrl ||
+          "",
+        passportPhotoUrl:
+          response.data?.passportPhotoUrl ||
+          response.data?.photoUrl ||
+          "",
+      };
+      setProfileData(normalized);
 
       // Save to cache
-      await saveProfileToCache(response.data);
+      await saveProfileToCache(normalized);
     } catch (error: any) {
       console.error("Error fetching profile:", error);
       // Try to load cached data as fallback
       const cachedProfile = await loadCachedProfile();
       if (cachedProfile) {
         console.log("Using cached profile as fallback:", JSON.stringify(cachedProfile, null, 2));
-        setProfileData(cachedProfile);
+        setProfileData({
+          ...cachedProfile,
+          photoUrl:
+            cachedProfile?.passportPhotoUrl ||
+            cachedProfile?.photoUrl ||
+            "",
+          passportPhotoUrl:
+            cachedProfile?.passportPhotoUrl ||
+            cachedProfile?.photoUrl ||
+            "",
+        });
       } else {
         // Use user store data as last resort
         if (user) {
@@ -356,8 +425,13 @@ const ProfilePage: React.FC = () => {
             status: "active",
           };
           console.log("Using fallback data:", JSON.stringify(fallbackData, null, 2));
-          setProfileData(fallbackData);
-          await saveProfileToCache(fallbackData);
+          const normalizedFallback = {
+            ...fallbackData,
+            photoUrl: fallbackData.photoUrl || "",
+            passportPhotoUrl: fallbackData.passportPhotoUrl || fallbackData.photoUrl || "",
+          };
+          setProfileData(normalizedFallback);
+          await saveProfileToCache(normalizedFallback);
         }
       }
       showDialog("DANGER", "Error", `Failed to fetch profile data: ${error.message}`);
@@ -408,6 +482,17 @@ const ProfilePage: React.FC = () => {
     } catch (error) {
       console.error("Error picking local photo:", error);
       showDialog("DANGER", "Error", "Failed to update profile photo.");
+    }
+  };
+
+  const handleThemeToggle = async (enabled: boolean): Promise<void> => {
+    const selectedTheme: ThemePreference = enabled ? "dark" : "light";
+    try {
+      Appearance.setColorScheme(selectedTheme);
+      await AsyncStorage.setItem(THEME_PREFERENCE_KEY, selectedTheme);
+    } catch (error) {
+      console.error("Error saving theme preference:", error);
+      showDialog("DANGER", "Error", "Failed to save theme preference.");
     }
   };
 
@@ -523,8 +608,8 @@ const ProfilePage: React.FC = () => {
   };
 
   const getStatusColor = (status?: string): string => {
-    if (!status) return "#FF9800";
-    return status.toLowerCase() === "active" ? "#4CAF50" : "#FF9800";
+    if (!status) return "#F59E0B";
+    return status.toLowerCase() === "active" ? colors.green : "#F59E0B";
   };
 
   const formatEmploymentType = (type?: string): string => {
@@ -538,12 +623,37 @@ const ProfilePage: React.FC = () => {
   };
 
   const ProfileCard: React.FC = () => (
-    <View style={[styles.profileCard, { backgroundColor: colors.white }]}>
+    <View
+      style={[
+        styles.profileCard,
+        { backgroundColor: colors.white, borderColor: colors.border },
+      ]}
+    >
       {/* Triangle decorations */}
-      <View style={styles.triangle} />
-      <View style={styles.triangle2} />
-      <View style={styles.triangle3} />
-      <View style={styles.triangle4} />
+      <View
+        style={[
+          styles.triangle,
+          { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+        ]}
+      />
+      <View
+        style={[
+          styles.triangle2,
+          { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+        ]}
+      />
+      <View
+        style={[
+          styles.triangle3,
+          { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+        ]}
+      />
+      <View
+        style={[
+          styles.triangle4,
+          { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+        ]}
+      />
 
       {/* Main content */}
       <View style={styles.profileImageSection}>
@@ -563,7 +673,11 @@ const ProfilePage: React.FC = () => {
           <View
             style={[
               styles.profileImageRing,
-              { borderColor: "#c9e8ffff" },
+              {
+                borderColor: isDarkMode
+                  ? `${colors.primary}88`
+                  : "#c9e8ffff",
+              },
             ]}
           />
 
@@ -638,7 +752,12 @@ const ProfilePage: React.FC = () => {
       }}
       activeOpacity={uri ? 0.8 : 1}
     >
-      <View style={styles.documentPreview}>
+      <View
+        style={[
+          styles.documentPreview,
+          { backgroundColor: colors.inputBackground, borderColor: colors.border, borderWidth: 1 },
+        ]}
+      >
         {uri ? (
           <Image source={{ uri }} style={styles.documentImage} />
         ) : (
@@ -782,9 +901,9 @@ const ProfilePage: React.FC = () => {
             icon="man-outline"
             label="Reporting Manager"
             value={
-              <Text style={{ fontSize: 14, fontWeight: "600" }}>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: colors.text }}>
                 {getManagerName()}{" "}
-                <Text style={{ fontSize: 11 }}>
+                <Text style={{ fontSize: 11, color: colors.textSecondary }}>
                   ({getManagerEmployeeCode()})
                 </Text>
               </Text>
@@ -891,7 +1010,7 @@ const ProfilePage: React.FC = () => {
           setOpenSection={setOpenSection}
           colors={colors}
         >
-          <View style={styles.policyCard}>
+          <View style={[styles.policyCard, { backgroundColor: colors.inputBackground }]}>
             <Text style={[styles.policyText, { color: colors.text }]}>
               Follow attendance policy, keep profile details updated, and submit
               timeslips within 48 hours of a missed punch.
@@ -902,13 +1021,52 @@ const ProfilePage: React.FC = () => {
           </View>
         </AccordionSection>
 
+        <View
+          style={[
+            styles.themeCard,
+            { backgroundColor: colors.white, borderColor: colors.border },
+          ]}
+        >
+          <View style={styles.themeCardLeft}>
+            <View
+              style={[
+                styles.themeIconContainer,
+                { backgroundColor: `${colors.primary}1A` },
+              ]}
+            >
+              <Ionicons
+                name={isDarkMode ? "moon-outline" : "sunny-outline"}
+                size={18}
+                color={colors.primary}
+              />
+            </View>
+            <View>
+              <Text style={[styles.themeTitle, { color: colors.text }]}>
+                Dark Theme
+              </Text>
+              <Text
+                style={[styles.themeSubtitle, { color: colors.textSecondary }]}
+              >
+                {isDarkMode ? "On" : "Off"}
+              </Text>
+            </View>
+          </View>
+          <Switch
+            value={isDarkMode}
+            onValueChange={handleThemeToggle}
+            trackColor={{ false: colors.border, true: `${colors.primary}99` }}
+            thumbColor={colors.onPrimary}
+            ios_backgroundColor={colors.border}
+          />
+        </View>
+
         {/* Action Buttons */}
         <View style={styles.actionSection}>
           <ActionButton
             icon="log-out-outline"
             title={isLoggingOut ? "Logging out..." : "Logout"}
             onPress={handleLogout}
-            color="#ff4444"
+            color={colors.red}
             disabled={isLoggingOut}
           />
         </View>
@@ -935,7 +1093,7 @@ const ProfilePage: React.FC = () => {
             style={styles.modalCloseButton}
             onPress={() => setIsImageModalVisible(false)}
           >
-            <Ionicons name="close" size={30} color="#fff" />
+            <Ionicons name="close" size={30} color={colors.onPrimary} />
           </TouchableOpacity>
           <Image
             source={{
@@ -1251,6 +1409,36 @@ const styles = StyleSheet.create({
   policyHint: {
     fontSize: moderateScale(11),
     marginTop: verticalScale(6),
+  },
+  themeCard: {
+    borderWidth: 1,
+    borderRadius: moderateScale(14),
+    paddingHorizontal: horizontalScale(12),
+    paddingVertical: verticalScale(10),
+    marginTop: verticalScale(4),
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  themeCardLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: horizontalScale(10),
+  },
+  themeIconContainer: {
+    width: horizontalScale(34),
+    height: horizontalScale(34),
+    borderRadius: horizontalScale(17),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  themeTitle: {
+    fontSize: moderateScale(14),
+    fontWeight: "700",
+  },
+  themeSubtitle: {
+    fontSize: moderateScale(12),
+    marginTop: verticalScale(2),
   },
   actionButton: {
     flexDirection: "row",

@@ -18,11 +18,13 @@ import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import { getLeaveBalance, getLeaveRequests, getPendingLeaves, getAuthProfile } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
 import { darkTheme, lightTheme } from "../constants/colors";
+import type { AppTheme } from "../constants/colors";
 import { CACHE_TTL, withCache, invalidateCacheByPrefix, getCached } from "utils/apiCache";
 
 const Leave = () => {
   const colorScheme = useColorScheme() ?? "light";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
+  const isDarkMode = colorScheme === "dark";
 
   const [selectedTab, setSelectedTab] = React.useState("All");
   const [fabOpen, setFabOpen] = useState(false);
@@ -285,37 +287,79 @@ const Leave = () => {
 
         {/* Summary Card */}
         <View style={styles.cardWrapper}>
-          <View style={[styles.card, { backgroundColor: colors.white }]}>
-            <View style={styles.triangle} />
-            <View style={styles.triangle2} />
-            <View style={styles.triangle3} />
-            <View style={styles.triangle4} />
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: colors.white, borderColor: colors.border },
+            ]}
+          >
+            <View
+              style={[
+                styles.triangle,
+                { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+              ]}
+            />
+            <View
+              style={[
+                styles.triangle2,
+                { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+              ]}
+            />
+            <View
+              style={[
+                styles.triangle3,
+                { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+              ]}
+            />
+            <View
+              style={[
+                styles.triangle4,
+                { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+              ]}
+            />
             <View style={styles.contentContainer}>
               {leaveBalances.length === 0 && (
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyText}>No leave balances available</Text>
+                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                    No leave balances available
+                  </Text>
                 </View>
               )}
               {leaveBalances.map((balance, index) => (
                 <View key={balance.id || index}>
                   <View style={styles.leaveRow}>
-                    <View style={[styles.iconWrapper, { backgroundColor: "#E3F2FD" }]}>
+                    <View
+                      style={[
+                        styles.iconWrapper,
+                        {
+                          backgroundColor: isDarkMode
+                            ? "rgba(33,150,243,0.22)"
+                            : "#E3F2FD",
+                        },
+                      ]}
+                    >
                       <Feather name="calendar" size={20} color="#2196F3" />
                     </View>
                     <View style={styles.textContainer}>
-                      <Text style={styles.typeText}>
+                      <Text style={[styles.typeText, { color: colors.text }]}>
                         {balance.leaveType?.name || "Leave"}
                       </Text>
-                      <Text style={styles.labelText}>Balance</Text>
+                      <Text style={[styles.labelText, { color: colors.textMuted }]}>
+                        Balance
+                      </Text>
                     </View>
                     <View style={styles.rightContainer}>
-                      <Text style={styles.countText}>
+                      <Text style={[styles.countText, { color: colors.primary }]}>
                         {balance.closingBalance ?? 0}
                       </Text>
-                      <Text style={styles.dateText}>Available</Text>
+                      <Text style={[styles.dateText, { color: colors.textMuted }]}>
+                        Available
+                      </Text>
                     </View>
                   </View>
-                  {index < leaveBalances.length - 1 && <View style={styles.divider} />}
+                  {index < leaveBalances.length - 1 && (
+                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                  )}
                 </View>
               ))}
             </View>
@@ -323,20 +367,26 @@ const Leave = () => {
         </View>
 
         {/* Filter Tabs */}
-        <View style={styles.tabBar}>
+        <View
+          style={[
+            styles.tabBar,
+            { backgroundColor: colors.inputBackground, borderColor: colors.border },
+          ]}
+        >
           {tabs.map((tab) => (
             <TouchableOpacity
               key={tab}
               onPress={() => setSelectedTab(tab)}
               style={[
                 styles.tabItem,
-                selectedTab === tab && styles.tabItemActive,
+                selectedTab === tab && [styles.tabItemActive, { backgroundColor: colors.primary }],
               ]}
             >
               <Text
                 style={[
                   styles.tabText,
-                  selectedTab === tab && styles.tabTextActive,
+                  { color: colors.textMuted },
+                  selectedTab === tab && [styles.tabTextActive, { color: colors.onPrimary }],
                 ]}
               >
                 {tab}
@@ -351,34 +401,47 @@ const Leave = () => {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
           }
         >
           {filteredLeaves.length === 0 && (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No leave requests found</Text>
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                No leave requests found
+              </Text>
             </View>
           )}
           {filteredLeaves.map((leave) => (
-            <View key={leave.id} style={styles.leaveCard}>
+            <View
+              key={leave.id}
+              style={[
+                styles.leaveCard,
+                { backgroundColor: colors.white, borderColor: colors.border },
+              ]}
+            >
               <View style={styles.leaveCardHeader}>
-                <Text style={styles.leaveDateText}>
+                <Text style={[styles.leaveDateText, { color: colors.text }]}>
                   {formatDate(leave.createdAt)}
                 </Text>
-                <Text style={styles.leaveTypeText}>
+                <Text style={[styles.leaveTypeText, { color: colors.textSecondary }]}>
                   {leave.leaveType?.name || "Leave"}
                 </Text>
               </View>
               <View style={styles.leaveCardBody}>
                 <View>
-                  <Text style={styles.cardLabel}>Leave Date</Text>
-                  <Text style={styles.cardValue}>
+                  <Text style={[styles.cardLabel, { color: colors.textMuted }]}>Leave Date</Text>
+                  <Text style={[styles.cardValue, { color: colors.text }]}>
                     {formatDate(leave.startDate)} - {formatDate(leave.endDate)}
                   </Text>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
-                  <Text style={styles.cardLabel}>Total Leave</Text>
-                  <Text style={styles.cardValue}>
+                  <Text style={[styles.cardLabel, { color: colors.textMuted }]}>Total Leave</Text>
+                  <Text style={[styles.cardValue, { color: colors.text }]}>
                     {leave.numberOfDays ??
                       leave.totalDays ??
                       leave.days ??
@@ -422,7 +485,7 @@ const Leave = () => {
                 </Text>
               </View>
 
-              <LeaveTimeline status={getApprovalState(leave)} />
+              <LeaveTimeline status={getApprovalState(leave)} colors={colors} />
             </View>
           ))}
         </ScrollView>
@@ -518,12 +581,14 @@ const Leave = () => {
 
 const LeaveTimeline = ({
   status,
+  colors,
 }: {
   status: {
     managerStatus: "pending" | "approved" | "rejected";
     hrStatus: "pending" | "approved" | "rejected";
     showManager: boolean;
   };
+  colors: AppTheme;
 }) => {
   const pulse = useRef(new Animated.Value(0)).current;
 
@@ -568,11 +633,18 @@ const LeaveTimeline = ({
   const showManager = status.showManager;
 
   return (
-    <View style={styles.timelineContainer}>
+    <View
+      style={[
+        styles.timelineContainer,
+        { backgroundColor: colors.inputBackground, borderColor: colors.border },
+      ]}
+    >
       <View style={styles.timelineRow}>
         <View style={styles.timelineStep}>
           <View style={[styles.dot, styles.dotApproved]} />
-          <Text style={styles.timelineLabel}>Applied</Text>
+          <Text style={[styles.timelineLabel, { color: colors.textSecondary }]}>
+            Applied
+          </Text>
         </View>
 
         {showManager ? (
@@ -595,7 +667,9 @@ const LeaveTimeline = ({
                   ]}
                 />
               )}
-              <Text style={styles.timelineLabel}>Manager</Text>
+              <Text style={[styles.timelineLabel, { color: colors.textSecondary }]}>
+                Manager
+              </Text>
             </View>
           </>
         ) : null}
@@ -618,7 +692,9 @@ const LeaveTimeline = ({
               ]}
             />
           )}
-          <Text style={styles.timelineLabel}>HR</Text>
+          <Text style={[styles.timelineLabel, { color: colors.textSecondary }]}>
+            HR
+          </Text>
         </View>
       </View>
     </View>
@@ -757,7 +833,7 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: "row",
     justifyContent: "space-around",
-    backgroundColor: "#f8f9fa",
+    borderWidth: 1,
     borderRadius: moderateScale(12),
     marginTop: verticalScale(24),
     marginHorizontal: horizontalScale(20),

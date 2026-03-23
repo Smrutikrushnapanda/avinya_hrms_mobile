@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { Calendar, DateData } from "react-native-calendars";
-import { monthlyAttendance } from "../../api/api";
+import { monthlyAttendance, getAttendanceSettings } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
 import { darkTheme, lightTheme } from "../constants/colors";
 
@@ -23,12 +23,13 @@ const todayCircleSize = circleSize * 1.1; // 10% larger for today
 const textSize = Math.min(daySize * 0.45, 14); // Larger text size relative to circle
 
 // Define types for attendance data
-type AttendanceStatus = "present" | "absent" | "half-day" | "pending";
+type AttendanceStatus = "present" | "absent" | "half-day" | "pending" | "weekend";
 
 interface AttendanceRecord {
   date: string;
   status: AttendanceStatus;
   isSunday: boolean;
+  isWeekend?: boolean;
   isHoliday: boolean;
   holidayName?: string;
   isOptional?: boolean;
@@ -59,7 +60,9 @@ interface MarkedDates {
 
 const HomeCalendar = () => {
   const colorScheme = useColorScheme() ?? "light";
+  const isDarkMode = colorScheme === "dark";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
+  const calendarSurfaceColor = isDarkMode ? colors.card : colors.surface;
   const { user } = useAuthStore();
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -75,6 +78,28 @@ const HomeCalendar = () => {
   const [currentYear, setCurrentYear] = useState<number>(
     new Date().getFullYear()
   );
+  const [workingDays, setWorkingDays] = useState<number[] | undefined>(undefined);
+  const [weekdayOffRules, setWeekdayOffRules] = useState<Record<string, number[]> | undefined>(undefined);
+
+  // Function to determine org off-day
+  const isOrgOffDay = (dateObj: Date): boolean => {
+    const dow = dateObj.getUTCDay(); // 0=Sun
+    const weekNum = Math.ceil(dateObj.getUTCDate() / 7);
+
+    if (workingDays && !workingDays.includes(dow)) return true;
+
+    if (weekdayOffRules && Array.isArray(weekdayOffRules[dow])) {
+      if (weekdayOffRules[dow].includes(weekNum)) return true;
+    }
+
+    // Default fallback: Sundays off + 2nd/4th Saturdays off
+    if (!workingDays && !weekdayOffRules) {
+      if (dow === 0) return true;
+      if (dow === 6 && (weekNum === 2 || weekNum === 4)) return true;
+    }
+
+    return dow === 0;
+  };
 
   // Function to fetch monthly attendance data
   const fetchMonthlyAttendance = async (month: number, year: number) => {
@@ -97,8 +122,36 @@ const HomeCalendar = () => {
 
       attendanceRecords.forEach((record) => {
         const date = record.date;
-        formattedAttendanceData[date] = record;
+        formattedAttendanceData[date] = {
+          ...record,
+        };
       });
+
+      // Ensure org off days are marked (blue) and never show absent on off days
+      const daysInMonth = new Date(year, month, 0).getUTCDate();
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateObj = new Date(Date.UTC(year, month - 1, day));
+        const dateStr = dateObj.toISOString().split("T")[0];
+        const off = isOrgOffDay(dateObj);
+
+        const existing = formattedAttendanceData[dateStr];
+        const keepStatuses = ["present", "half-day", "leave", "half-leave"];
+
+        if (existing) {
+          if (keepStatuses.includes(existing.status)) continue;
+          if (existing.status === "holiday") continue;
+        }
+
+        if (off) {
+          formattedAttendanceData[dateStr] = {
+            date: dateStr,
+            status: "weekend",
+            isSunday: dateObj.getUTCDay() === 0,
+            isWeekend: true,
+            isHoliday: existing?.isHoliday ?? false,
+          } as AttendanceRecord;
+        }
+      }
 
       setAttendanceData(formattedAttendanceData);
     } catch (error) {
@@ -111,7 +164,23 @@ const HomeCalendar = () => {
   // Fetch data when component mounts or when month/year changes
   useEffect(() => {
     fetchMonthlyAttendance(currentMonth, currentYear);
-  }, [currentMonth, currentYear, user?.userId, user?.organizationId]);
+  }, [currentMonth, currentYear, user?.userId, user?.organizationId, workingDays, weekdayOffRules]);
+
+  // Fetch org attendance settings once to apply weekend rules
+  useEffect(() => {
+    const loadSettings = async () => {
+      if (!user?.organizationId) return;
+      try {
+        const res = await getAttendanceSettings(user.organizationId);
+        const s = res.data;
+        setWorkingDays(s?.workingDays);
+        setWeekdayOffRules(s?.weekdayOffRules);
+      } catch {
+        // ignore
+      }
+    };
+    loadSettings();
+  }, [user?.organizationId]);
 
   const onDayPress = (day: DateData) => {
     setSelectedDate(day.dateString);
@@ -164,9 +233,9 @@ const HomeCalendar = () => {
       const record = attendanceData[date];
       let backgroundColor: string;
 
-      // Priority: Sunday > Holiday > Status
-      if (record.isSunday) {
-        backgroundColor = "#026D94"; // Blue for Sunday
+      // Priority: Weekend > Holiday > Status (absent suppressed on off days)
+      if (record.isWeekend || record.isSunday) {
+        backgroundColor = "#026D94"; // Blue for weekend/off days
       } else if (record.isHoliday) {
         backgroundColor = "#ffb4b4ff"; // Blue for holidays
       } else {
@@ -214,9 +283,9 @@ const HomeCalendar = () => {
   const getAttendanceBorderColor = (dayData: AttendanceRecord | undefined): string | null => {
     if (!dayData) return null;
     
-    // Priority: Sunday > Holiday > Status
-    if (dayData.isSunday) {
-      return "#026D94"; // Blue for Sunday
+    // Priority: Weekend > Holiday > Status
+    if (dayData.isWeekend || dayData.isSunday) {
+      return "#026D94"; // Blue for weekend/off days
     } else if (dayData.isHoliday) {
       return "#045faaff"; // Black border for holidays
     } else {
@@ -239,7 +308,7 @@ const HomeCalendar = () => {
   const getAttendanceLightBackgroundColor = (dayData: AttendanceRecord | undefined): string | null => {
     if (!dayData) return null;
     
-    if (dayData.isSunday) {
+    if (dayData.isWeekend || dayData.isSunday) {
       return "#026D94"; 
     } else if (dayData.isHoliday) {
       return "transparent"; 
@@ -312,15 +381,16 @@ const HomeCalendar = () => {
         </View>
 
         <Calendar
+          key={`home-calendar-${colorScheme}`}
           onDayPress={onDayPress}
           onMonthChange={onMonthChange}
           markedDates={generateMarkedDates()}
           theme={{
             backgroundColor: colors.background,
-            calendarBackground: colors.white,
+            calendarBackground: calendarSurfaceColor,
             textSectionTitleColor: colors.text,
             selectedDayBackgroundColor: colors.primary,
-            selectedDayTextColor: "#ffffff",
+            selectedDayTextColor: colors.onPrimary,
             todayTextColor: colors.primary,
             dayTextColor: colors.text,
             textDisabledColor: colors.grey,
@@ -330,7 +400,13 @@ const HomeCalendar = () => {
             textMonthFontWeight: "600",
             textDayHeaderFontWeight: "600",
           }}
-          style={styles.calendar}
+          style={[
+            styles.calendar,
+            {
+              backgroundColor: calendarSurfaceColor,
+              borderColor: colors.border,
+            },
+          ]}
           markingType="custom"
           dayComponent={({ date, state, marking }) => {
             const dayData = attendanceData[date?.dateString || ""];
@@ -402,8 +478,8 @@ const HomeCalendar = () => {
                     style={[
                       styles.dayText,
                       {
-                        color: dayData?.isSunday
-                          ? "#ffffff" // White text for Sunday
+                        color: (dayData?.isSunday || dayData?.isWeekend)
+                          ? "#ffffff" // White text for Sunday and weekend off days (2nd/4th Sat)
                           : borderColor && !dayData?.isSunday
                           ? borderColor // Use border color for text
                           : isToday && !dayData
@@ -455,7 +531,7 @@ const HomeCalendar = () => {
       {/* Info Modal */}
       <Modal visible={showInfo} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={[styles.infoModalBox, { backgroundColor: colors.white }]}>
+          <View style={[styles.infoModalBox, { backgroundColor: colors.surface }]}>
             <View style={styles.infoModalHeader}>
               <Text style={[styles.infoModalTitle, { color: colors.text }]}>Legend</Text>
               <TouchableOpacity onPress={() => setShowInfo(false)} style={styles.infoCloseButton}>
@@ -527,7 +603,7 @@ const HomeCalendar = () => {
       {/* Date Info Modal */}
       <Modal visible={showDateModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={[styles.dateModalBox, { backgroundColor: colors.white }]}>
+          <View style={[styles.dateModalBox, { backgroundColor: colors.surface }]}>
             <View style={[styles.dateModalHeader, { backgroundColor: colors.primary }]}>
               <Text style={[styles.dateModalTitle, { color: "#ffffff" }]}>
                 {formatDateForDisplay(selectedDayData?.date || "")}
@@ -629,7 +705,7 @@ const HomeCalendar = () => {
       {/* Photo Viewer Modal */}
       <Modal visible={showPhotoModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={[styles.photoModalBox, { backgroundColor: colors.white }]}>
+          <View style={[styles.photoModalBox, { backgroundColor: colors.surface }]}>
             <TouchableOpacity 
               onPress={() => setShowPhotoModal(false)} 
               style={[styles.photoCloseButton, { backgroundColor: colors.primary }]}
@@ -669,6 +745,7 @@ const styles = StyleSheet.create({
   },
   calendar: {
     borderRadius: 10,
+    borderWidth: 1,
     elevation: 3,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },

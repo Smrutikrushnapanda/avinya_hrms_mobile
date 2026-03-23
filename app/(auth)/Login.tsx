@@ -135,7 +135,7 @@ const Login = () => {
       }
 
       router.replace("/(tabs)");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login Error:", error);
       showDialog("DANGER", "Login Failed", error?.response?.data?.message || "Invalid credentials");
     } finally {
@@ -145,7 +145,7 @@ const Login = () => {
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: "#ffffff" }]}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
@@ -156,7 +156,7 @@ const Login = () => {
           showsVerticalScrollIndicator={false}
         >
           {/* Background Design */}
-          <View style={styles.backgroundContainer}>
+          <View style={[styles.backgroundContainer, { backgroundColor: colors.background }]}>
             <View
               style={[styles.blueCircle, { backgroundColor: colors.secondary }]}
             />

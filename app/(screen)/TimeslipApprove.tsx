@@ -52,7 +52,7 @@ interface TimeslipEntry {
 
 // Debounce utility
 const debounce = (func: Function, delay: number) => {
-  let timeoutId: NodeJS.Timeout;
+  let timeoutId: ReturnType<typeof setTimeout>;
   return (...args: any[]) => {
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => func(...args), delay);
@@ -62,6 +62,7 @@ const debounce = (func: Function, delay: number) => {
 const TimeslipApprove = () => {
   const colorScheme = useColorScheme() ?? "light";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
+  const isDarkMode = colorScheme === "dark";
   const [timestampEntries, setTimestampEntries] = useState<TimeslipEntry[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [checkAll, setCheckAll] = useState(false);
@@ -269,7 +270,12 @@ const TimeslipApprove = () => {
   );
 
   const renderTimeslipCard = ({ item: entry }: { item: TimeslipEntry }) => (
-    <View style={styles.timestampCard}>
+    <View
+      style={[
+        styles.timestampCard,
+        { backgroundColor: colors.white, borderColor: colors.border },
+      ]}
+    >
       <View style={[styles.dateBadge, { backgroundColor: colors.primary }]}>
         <Text style={[styles.cardHeaderText, { color: colors.white }]}>
           {formatDate(entry.date)}
@@ -285,7 +291,7 @@ const TimeslipApprove = () => {
             <Feather
               name={selectedIds.includes(entry.id) ? "check-square" : "square"}
               size={moderateScale(20)}
-              color={selectedIds.includes(entry.id) ? "#005F90" : "#6B7280"}
+              color={selectedIds.includes(entry.id) ? colors.primary : colors.textMuted}
             />
           </TouchableOpacity>
         </View>
@@ -313,13 +319,27 @@ const TimeslipApprove = () => {
       <View style={styles.timeEntriesContainer}>
         <View style={styles.timeEntry}>
           <View style={styles.timeEntryHeader}>
-            <View style={[styles.entryIcon, { backgroundColor: "#E3F2FD" }]}>
+            <View
+              style={[
+                styles.entryIcon,
+                {
+                  backgroundColor: isDarkMode
+                    ? "rgba(33,150,243,0.22)"
+                    : "#E3F2FD",
+                },
+              ]}
+            >
               <Feather name="log-in" size={16} color="#2196F3" />
             </View>
-            <Text style={styles.entryLabel}>Check In</Text>
+            <Text style={[styles.entryLabel, { color: colors.textSecondary }]}>
+              Check In
+            </Text>
           </View>
           <Text
-            style={entry.corrected_in ? styles.timeValue : styles.noTimeValue}
+            style={[
+              entry.corrected_in ? styles.timeValue : styles.noTimeValue,
+              { color: entry.corrected_in ? colors.text : colors.textMuted },
+            ]}
           >
             {formatTime(entry.corrected_in)}
           </Text>
@@ -330,13 +350,27 @@ const TimeslipApprove = () => {
         </View>
         <View style={styles.timeEntry}>
           <View style={styles.timeEntryHeader}>
-            <View style={[styles.entryIcon, { backgroundColor: "#FFF3E0" }]}>
+            <View
+              style={[
+                styles.entryIcon,
+                {
+                  backgroundColor: isDarkMode
+                    ? "rgba(255,152,0,0.22)"
+                    : "#FFF3E0",
+                },
+              ]}
+            >
               <Feather name="log-out" size={16} color="#FF9800" />
             </View>
-            <Text style={styles.entryLabel}>Check Out</Text>
+            <Text style={[styles.entryLabel, { color: colors.textSecondary }]}>
+              Check Out
+            </Text>
           </View>
           <Text
-            style={entry.corrected_out ? styles.timeValue : styles.noTimeValue}
+            style={[
+              entry.corrected_out ? styles.timeValue : styles.noTimeValue,
+              { color: entry.corrected_out ? colors.text : colors.textMuted },
+            ]}
           >
             {formatTime(entry.corrected_out)}
           </Text>
@@ -346,18 +380,29 @@ const TimeslipApprove = () => {
       <View style={styles.reasonContainer}>
         <View style={styles.reasonHeader}>
           <View style={styles.reasonHeaderContent}>
-            <View style={[styles.entryIcon, { backgroundColor: "#ECEFF1" }]}>
+            <View
+              style={[
+                styles.entryIcon,
+                {
+                  backgroundColor: isDarkMode
+                    ? "rgba(96,125,139,0.25)"
+                    : "#ECEFF1",
+                },
+              ]}
+            >
               <Feather name="info" size={16} color="#607D8B" />
             </View>
-            <Text style={styles.entryLabel}>Reason</Text>
+            <Text style={[styles.entryLabel, { color: colors.textSecondary }]}>
+              Reason
+            </Text>
           </View>
-          <Text style={styles.employeeName}>
+          <Text style={[styles.employeeName, { color: colors.textSecondary }]}>
             {`${entry.employee.firstName} ${entry.employee.lastName}`}
           </Text>
         </View>
         <TouchableOpacity onPress={() => toggleReasonExpansion(entry.id)}>
           <Text
-            style={styles.reasonText}
+            style={[styles.reasonText, { color: colors.textSecondary }]}
             numberOfLines={expandedReasons[entry.id] ? undefined : 2}
           >
             {expandedReasons[entry.id]
@@ -368,7 +413,9 @@ const TimeslipApprove = () => {
       </View>
 
       {entry.status === "PENDING" && selectedIds.length === 0 && (
-        <View style={styles.individualButtonContainer}>
+        <View
+          style={[styles.individualButtonContainer, { borderTopColor: colors.border }]}
+        >
           <TouchableOpacity
             style={[styles.individualButton, styles.approveButton]}
             onPress={() => handleUpdateStatus([entry.id], "APPROVED")}
@@ -417,33 +464,66 @@ const TimeslipApprove = () => {
 
       {/* Stats Card */}
       <View style={styles.cardWrapper}>
-        <View style={[styles.card, { backgroundColor: "#FFFFFF", borderColor: "#E8ECEF" }]}>
-          <View style={[styles.triangle, { borderTopColor: "#E1F4FF" }]} />
-          <View style={[styles.triangle2, { borderTopColor: "#E1F4FF" }]} />
-          <View style={[styles.tulipArea, { borderTopColor: "#E1F4FF" }]} />
-          <View style={[styles.triangle4, { borderTopColor: "#E1F4FF" }]} />
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.white, borderColor: colors.border },
+          ]}
+        >
+          <View
+            style={[
+              styles.triangle,
+              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+            ]}
+          />
+          <View
+            style={[
+              styles.triangle2,
+              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+            ]}
+          />
+          <View
+            style={[
+              styles.tulipArea,
+              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+            ]}
+          />
+          <View
+            style={[
+              styles.triangle4,
+              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+            ]}
+          />
           <View style={styles.contentContainer}>
             <View style={styles.statsContainer}>
               <View style={styles.statItem}>
                 <View style={[styles.statDot, { backgroundColor: "#64748B" }]} />
-                <Text style={styles.statNumber}>{timestampEntries.length}</Text>
-                <Text style={styles.statLabel}>Total</Text>
+                <Text style={[styles.statNumber, { color: colors.text }]}>
+                  {timestampEntries.length}
+                </Text>
+                <Text style={[styles.statLabel, { color: colors.textMuted }]}>
+                  Total
+                </Text>
               </View>
-              <View style={styles.statDivider} />
+              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
               <View style={styles.statItem}>
                 <View style={[styles.statDot, { backgroundColor: "#F59E0B" }]} />
                 <Text style={[styles.statNumber, { color: "#F59E0B" }]}>
                   {countPendingTimeslips()}
                 </Text>
-                <Text style={styles.statLabel}>Pending</Text>
+                <Text style={[styles.statLabel, { color: colors.textMuted }]}>
+                  Pending
+                </Text>
               </View>
-              <View style={styles.statDivider} />
+              <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
               <View style={styles.statItem}>
                 <View style={[styles.statDot, { backgroundColor: "#005F90" }]} />
-                <Text style={[styles.statNumber, { color: "#005F90" }]}>
+                <Text style={[styles.statNumber, { color: colors.primary }]}>
                   {selectedIds.length}
                 </Text>
-                <Text style={styles.statLabel}>Selected</Text>
+                <Text style={[styles.statLabel, { color: colors.textMuted }]}>
+                  Selected
+                </Text>
               </View>
             </View>
           </View>
@@ -451,15 +531,27 @@ const TimeslipApprove = () => {
       </View>
 
       {/* Tabs */}
-      <View style={styles.tabBar}>
+      <View
+        style={[
+          styles.tabBar,
+          { backgroundColor: colors.inputBackground, borderColor: colors.border, borderWidth: 1 },
+        ]}
+      >
         {(["Pending", "All"] as const).map((tab) => (
           <TouchableOpacity
             key={tab}
             onPress={() => setSelectedTab(tab)}
-            style={[styles.tabItem, selectedTab === tab && styles.tabItemActive]}
+            style={[
+              styles.tabItem,
+              selectedTab === tab && [styles.tabItemActive, { backgroundColor: colors.primary }],
+            ]}
           >
             <Text
-              style={[styles.tabText, selectedTab === tab && styles.tabTextActive]}
+              style={[
+                styles.tabText,
+                { color: colors.textMuted },
+                selectedTab === tab && [styles.tabTextActive, { color: colors.onPrimary }],
+              ]}
             >
               {tab}
             </Text>
@@ -473,11 +565,11 @@ const TimeslipApprove = () => {
             style={styles.checkboxContainer}
             onPress={handleCheckAll}
           >
-            <Text style={styles.checkAllText}>Check All</Text>
+            <Text style={[styles.checkAllText, { color: colors.text }]}>Check All</Text>
             <Feather
               name={checkAll ? "check-square" : "square"}
               size={moderateScale(20)}
-              color={checkAll ? "#005F90" : "#6B7280"}
+              color={checkAll ? colors.primary : colors.textMuted}
             />
           </TouchableOpacity>
         </View>
@@ -501,8 +593,8 @@ const TimeslipApprove = () => {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Feather name="clock" size={48} color="#ccc" />
-            <Text style={styles.emptyText}>
+            <Feather name="clock" size={48} color={colors.textMuted} />
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>
               No {selectedTab.toLowerCase()} timeslips found
             </Text>
           </View>
@@ -510,7 +602,12 @@ const TimeslipApprove = () => {
       />
 
       {selectedTab === "Pending" && selectedIds.length > 0 && (
-        <View style={styles.buttonContainer}>
+        <View
+          style={[
+            styles.buttonContainer,
+            { backgroundColor: colors.white, borderTopColor: colors.border },
+          ]}
+        >
           <Animated.View
             style={{ transform: [{ scale: approveScale }], flex: 1 }}
           >

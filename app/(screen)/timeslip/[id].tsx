@@ -59,6 +59,7 @@ interface TimelineEvent {
 const TimeSlip = () => {
   const colorScheme = useColorScheme() ?? "light";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
+  const isDarkMode = colorScheme === "dark";
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { user } = useAuthStore();
@@ -263,8 +264,10 @@ const TimeSlip = () => {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <Header title="Timeslip Details" />
         <View style={styles.errorContainer}>
-          <Feather name="alert-circle" size={48} color="#F44336" />
-          <Text style={styles.errorText}>{error || "Timeslip not found"}</Text>
+          <Feather name="alert-circle" size={48} color={colors.red} />
+          <Text style={[styles.errorText, { color: colors.red }]}>
+            {error || "Timeslip not found"}
+          </Text>
         </View>
       </View>
     );
@@ -276,13 +279,38 @@ const TimeSlip = () => {
       <Header title="Timeslip Details" />
       <View style={{ height: verticalScale(40) }} />
       <View style={styles.cardWrapper}>
-        <View style={[styles.card, { backgroundColor: colors.white }]}>
-          <View style={styles.triangle} />
-          <View style={styles.triangle2} />
-          <View style={styles.triangle3} />
-          <View style={styles.triangle4} />
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.white, borderColor: colors.border },
+          ]}
+        >
+          <View
+            style={[
+              styles.triangle,
+              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+            ]}
+          />
+          <View
+            style={[
+              styles.triangle2,
+              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+            ]}
+          />
+          <View
+            style={[
+              styles.triangle3,
+              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+            ]}
+          />
+          <View
+            style={[
+              styles.triangle4,
+              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+            ]}
+          />
           <View style={styles.contentContainer}>
-            <View style={styles.dateBadge}>
+            <View style={[styles.dateBadge, { backgroundColor: colors.primary }]}>
               <Text style={styles.dateBadgeText}>
                 {new Date(timeslipDetail.date).toLocaleDateString("en-US", {
                   day: "2-digit",
@@ -294,13 +322,24 @@ const TimeSlip = () => {
             <View style={styles.timeEntriesContainer}>
               <View style={styles.timeEntry}>
                 <View style={styles.timeEntryHeader}>
-                  <View style={[styles.entryIcon, { backgroundColor: "#E3F2FD" }]}>
+                  <View
+                    style={[
+                      styles.entryIcon,
+                      {
+                        backgroundColor: isDarkMode
+                          ? "rgba(33,150,243,0.22)"
+                          : "#E3F2FD",
+                      },
+                    ]}
+                  >
                     <Feather name="log-in" size={16} color="#2196F3" />
                   </View>
-                  <Text style={styles.entryLabel}>Check In</Text>
+                  <Text style={[styles.entryLabel, { color: colors.textSecondary }]}>
+                    Check In
+                  </Text>
                 </View>
                 <View style={styles.timeDetails}>
-                  <Text style={styles.timeValue}>
+                  <Text style={[styles.timeValue, { color: colors.text }]}>
                     {formatTime(timeslipDetail.corrected_in)}
                   </Text>
                   <View
@@ -326,18 +365,29 @@ const TimeSlip = () => {
                 </View>
               </View>
               <View style={styles.verticalDivider}>
-                <View style={styles.dividerLine} />
-                <View style={styles.dividerDot} />
+                <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+                <View style={[styles.dividerDot, { backgroundColor: colors.primary }]} />
               </View>
               <View style={styles.timeEntry}>
                 <View style={styles.timeEntryHeader}>
-                  <View style={[styles.entryIcon, { backgroundColor: "#FFF3E0" }]}>
+                  <View
+                    style={[
+                      styles.entryIcon,
+                      {
+                        backgroundColor: isDarkMode
+                          ? "rgba(255,152,0,0.22)"
+                          : "#FFF3E0",
+                      },
+                    ]}
+                  >
                     <Feather name="log-out" size={16} color="#FF9800" />
                   </View>
-                  <Text style={styles.entryLabel}>Check Out</Text>
+                  <Text style={[styles.entryLabel, { color: colors.textSecondary }]}>
+                    Check Out
+                  </Text>
                 </View>
                 <View style={styles.timeDetails}>
-                  <Text style={styles.timeValue}>
+                  <Text style={[styles.timeValue, { color: colors.text }]}>
                     {formatTime(timeslipDetail.corrected_out)}
                   </Text>
                   <View
@@ -366,7 +416,12 @@ const TimeSlip = () => {
           </View>
         </View>
       </View>
-      <View style={[styles.reasonCard, { backgroundColor: colors.white }]}>
+      <View
+        style={[
+          styles.reasonCard,
+          { backgroundColor: colors.white, borderColor: colors.border },
+        ]}
+      >
         <View style={styles.reasonTitleContainer}>
           <Feather
             name="info"
@@ -376,7 +431,7 @@ const TimeSlip = () => {
           />
           <Text style={[styles.reasonTitle, { color: colors.text }]}>Reason</Text>
         </View>
-        <Text style={[styles.reasonText, { color: colors.textSecondary || "#4B5563" }]}>
+        <Text style={[styles.reasonText, { color: colors.textSecondary }]}>
           {timeslipDetail.reason || "No reason provided"}
         </Text>
       </View>
@@ -399,31 +454,36 @@ const TimeSlip = () => {
                     },
                   ]}
                 >
-                  <Feather name={event.icon} size={16} color="#fff" />
+                  <Feather name={event.icon as any} size={16} color={colors.onPrimary} />
                 </View>
                 {index < timeline.length - 1 && (
                   <View
                     style={[
                       styles.timelineLine,
-                      { backgroundColor: event.status === "completed" ? "#4CAF50" : "#E5E7EB" },
+                      { backgroundColor: event.status === "completed" ? "#4CAF50" : colors.border },
                     ]}
                   />
                 )}
               </View>
-              <View style={[styles.timelineContent, { backgroundColor: colors.white, borderColor: colors.border || "#F1F5F9" }]}>
+              <View
+                style={[
+                  styles.timelineContent,
+                  { backgroundColor: colors.white, borderColor: colors.border },
+                ]}
+              >
                 <View style={styles.timelineHeader}>
                   <Text style={[styles.timelineEventTitle, { color: colors.text }]}>{event.title}</Text>
                   {event.time && (
-                    <Text style={[styles.timelineTime, { color: colors.textSecondary || "#6B7280" }]}>
+                    <Text style={[styles.timelineTime, { color: colors.textSecondary }]}>
                       {event.time} • {event.date}
                     </Text>
                   )}
                 </View>
-                <Text style={[styles.timelineDescription, { color: colors.textSecondary || "#4B5563" }]}>
+                <Text style={[styles.timelineDescription, { color: colors.textSecondary }]}>
                   {event.description}
                 </Text>
                 {event.details && (
-                  <Text style={[styles.timelineDetails, { color: colors.textSecondary || "#6B7280" }]}>
+                  <Text style={[styles.timelineDetails, { color: colors.textSecondary }]}>
                     {event.details}
                   </Text>
                 )}

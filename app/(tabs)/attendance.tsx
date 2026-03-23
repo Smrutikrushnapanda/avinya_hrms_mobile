@@ -27,9 +27,9 @@ import {
   moderateScale,
   verticalScale,
 } from "utils/metrics";
+import { useResponsive } from "utils/useResponsive";
 import { darkTheme, lightTheme } from "../constants/colors";
 import AttendanceSkeleton from "../Loaders/AttendanceSkeleton";
-import { useResponsive } from "../utils/useResponsive";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -40,6 +40,7 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 const Attendance = () => {
   const colorScheme = useColorScheme() ?? "light";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
+  const isDarkMode = colorScheme === "dark";
   const { user } = useAuthStore();
   const currentDate = new Date();
   const { isMobile, isWeb } = useResponsive();
@@ -476,30 +477,62 @@ const Attendance = () => {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <AdminTabHeader title="Attendance" />
       <View style={styles.cardWrapper}>
-        <View style={[styles.card, { backgroundColor: colors.white }]}>
-          <View style={styles.triangle} />
-          <View style={styles.triangle2} />
-          <View style={styles.triangle3} />
-          <View style={styles.triangle4} />
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.white, borderColor: colors.border },
+          ]}
+        >
+          <View
+            style={[
+              styles.triangle,
+              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+            ]}
+          />
+          <View
+            style={[
+              styles.triangle2,
+              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+            ]}
+          />
+          <View
+            style={[
+              styles.triangle3,
+              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+            ]}
+          />
+          <View
+            style={[
+              styles.triangle4,
+              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
+            ]}
+          />
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <View style={styles.progressCircle}>
+              <View
+                style={[
+                  styles.progressCircle,
+                  { backgroundColor: colors.primary, borderColor: colors.primary },
+                ]}
+              >
                 <Text style={styles.progressText}>{attendancePercentage}%</Text>
               </View>
               <Text style={[styles.statLabel, { color: colors.text }]}>
                 Attendance Rate
               </Text>
             </View>
-            <View style={styles.verticalDivider} />
+            <View style={[styles.verticalDivider, { backgroundColor: colors.border }]} />
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{totalWorkingDays}</Text>
+              <Text style={[styles.statNumber, { color: colors.primary }]}>
+                {totalWorkingDays}
+              </Text>
               <Text style={[styles.statLabel, { color: colors.text }]}>
                 Total Working Days
               </Text>
             </View>
-            <View style={styles.verticalDivider} />
+            <View style={[styles.verticalDivider, { backgroundColor: colors.border }]} />
             <View style={styles.statItem}>
-              <Text style={[styles.statNumber, { color: "#00C851" }]}>
+              <Text style={[styles.statNumber, { color: colors.green }]}>
                 {employeeWorkingDays}
               </Text>
               <Text style={[styles.statLabel, { color: colors.text }]}>
@@ -515,23 +548,31 @@ const Attendance = () => {
               Attendance Details
             </Text>
             <TouchableOpacity
-              style={styles.filterButton}
+              style={[
+                styles.filterButton,
+                { backgroundColor: colors.inputBackground, borderColor: colors.primary },
+              ]}
               onPress={toggleMonthPicker}
               activeOpacity={0.7}
             >
-              <FontAwesome name="calendar" size={16} color="#035F91" />
-              <Text style={styles.filterButtonText}>
+              <FontAwesome name="calendar" size={16} color={colors.primary} />
+              <Text style={[styles.filterButtonText, { color: colors.primary }]}>
                 {monthNames[selectedMonth - 1]} {selectedYear}
               </Text>
               <Animated.View style={{ transform: [{ rotate: chevronRotation }] }}>
-                <FontAwesome name="chevron-down" size={12} color="#035F91" />
+                <FontAwesome name="chevron-down" size={12} color={colors.primary} />
               </Animated.View>
             </TouchableOpacity>
           </View>
 
           {/* Inline Month Picker */}
           {showMonthPicker && (
-            <View style={[styles.monthPickerCard, { backgroundColor: colors.white }]}>
+            <View
+              style={[
+                styles.monthPickerCard,
+                { backgroundColor: colors.white, borderColor: colors.border },
+              ]}
+            >
               {/* Year Selection */}
               <Text style={[styles.pickerSectionTitle, { color: colors.text }]}>Year</Text>
               <View style={styles.pickerYearGrid}>
@@ -622,7 +663,11 @@ const Attendance = () => {
 
           {attendanceData.length === 0 ? (
             <View style={styles.noDataContainer}>
-              <FontAwesome name="calendar-times-o" size={48} color="#ccc" />
+              <FontAwesome
+                name="calendar-times-o"
+                size={48}
+                color={colors.textMuted}
+              />
               <Text style={[styles.noDataText, { color: colors.text }]}>
                 No attendance data found for {monthNames[selectedMonth - 1]}{" "}
                 {selectedYear}
@@ -638,8 +683,8 @@ const Attendance = () => {
                 <RefreshControl
                   refreshing={refreshing}
                   onRefresh={handleRefresh}
-                  colors={["#035F91"]}
-                  tintColor="#035F91"
+                  colors={[colors.primary]}
+                  tintColor={colors.primary}
                 />
               }
             >
@@ -659,6 +704,11 @@ const Attendance = () => {
                     key={`${item.originalDate}-${index}`}
                     style={[
                       styles.attendanceCard,
+                      {
+                        backgroundColor: colors.white,
+                        borderColor: colors.border,
+                        borderWidth: 1,
+                      },
                       { borderLeftColor: badgeColor },
                     ]}
                   >
@@ -692,22 +742,22 @@ const Attendance = () => {
                         {item.date}
                       </Text>
                     </View>
-                    <View style={styles.timeSection}>
+                    <View style={[styles.timeSection, { borderTopColor: colors.border }]}>
                       <View style={styles.timeRow}>
-                        <FontAwesome name="clock-o" size={14} color="#999" />
+                        <FontAwesome name="clock-o" size={14} color={colors.textMuted} />
                         <TouchableOpacity
                           onPress={() => handlePhotoClick(item.inPhotoUrl)}
                         >
-                          <Text style={styles.timeText}>
+                          <Text style={[styles.timeText, { color: colors.textSecondary }]}>
                             Punch In: {item.inTime || "--"}
                           </Text>
                         </TouchableOpacity>
-                        <View style={styles.timeSeparator} />
-                        <FontAwesome name="clock-o" size={14} color="#999" />
+                        <View style={[styles.timeSeparator, { backgroundColor: colors.border }]} />
+                        <FontAwesome name="clock-o" size={14} color={colors.textMuted} />
                         <TouchableOpacity
                           onPress={() => handlePhotoClick(item.outPhotoUrl)}
                         >
-                          <Text style={styles.timeText}>
+                          <Text style={[styles.timeText, { color: colors.textSecondary }]}>
                             Last Punch: {item.outTime || "--"}
                           </Text>
                         </TouchableOpacity>
@@ -718,14 +768,17 @@ const Attendance = () => {
               })}
               {hasMoreData && (
                 <TouchableOpacity
-                  style={styles.loadMoreButton}
+                  style={[
+                    styles.loadMoreButton,
+                    { backgroundColor: colors.inputBackground },
+                  ]}
                   onPress={loadMoreItems}
                   disabled={loadingMore}
                 >
                   {loadingMore ? (
                     <View style={styles.loadingMoreContainer}>
-                      <ActivityIndicator size="small" color="#026D94" />
-                      <Text style={styles.loadingMoreText}>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                      <Text style={[styles.loadingMoreText, { color: colors.primary }]}>
                         Loading more...
                       </Text>
                     </View>
@@ -734,16 +787,18 @@ const Attendance = () => {
                       <FontAwesome
                         name="angle-down"
                         size={18}
-                        color="#026D94"
+                        color={colors.primary}
                       />
-                      <Text style={styles.loadMoreText}>Load More</Text>
+                      <Text style={[styles.loadMoreText, { color: colors.primary }]}>
+                        Load More
+                      </Text>
                     </View>
                   )}
                 </TouchableOpacity>
               )}
               {!hasMoreData && displayedItems.length > 0 && (
                 <View style={styles.endOfListContainer}>
-                  <Text style={styles.endOfListText}>
+                  <Text style={[styles.endOfListText, { color: colors.textMuted }]}>
                     You've reached the end of your attendance records
                   </Text>
                 </View>

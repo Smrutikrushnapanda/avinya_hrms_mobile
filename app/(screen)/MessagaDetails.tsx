@@ -25,24 +25,35 @@ const MessagaDetails = () => {
       <Header title="Message Detail" />
       <View style={styles.cardWrapper}>
         <TouchableOpacity style={styles.backRow} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={18} color="#005F90" />
-          <Text style={styles.backText}>Back</Text>
+          <Ionicons name="arrow-back" size={18} color={colors.primary} />
+          <Text style={[styles.backText, { color: colors.primary }]}>Back</Text>
         </TouchableOpacity>
-        <View style={[styles.card, { backgroundColor: colors.white }]}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.white, borderColor: colors.border, borderWidth: 1 },
+          ]}
+        >
           <View style={styles.statsContainer}>
             <View style={styles.headerRow}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{msg.initials}</Text>
+              <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+                <Text style={[styles.avatarText, { color: colors.onPrimary }]}>
+                  {msg.initials}
+                </Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.title}>{msg.title}</Text>
-                <Text style={styles.subtitle}>{msg.subtitle}</Text>
+                <Text style={[styles.title, { color: colors.text }]}>{msg.title}</Text>
+                <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+                  {msg.subtitle}
+                </Text>
               </View>
-              <Text style={styles.time}>{msg.time}</Text>
+              <Text style={[styles.time, { color: colors.textMuted }]}>{msg.time}</Text>
             </View>
 
-            <View style={styles.messageBox}>
-              <Text style={styles.messageText}>{msg.message}</Text>
+            <View style={[styles.messageBox, { borderTopColor: colors.border }]}>
+              <Text style={[styles.messageText, { color: colors.textSecondary }]}>
+                {msg.message}
+              </Text>
             </View>
           </View>
         </View>
