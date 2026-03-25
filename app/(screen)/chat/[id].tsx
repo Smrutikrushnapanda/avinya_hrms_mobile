@@ -10,6 +10,7 @@ import {
   Modal,
   Platform,
   SafeAreaView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -484,6 +485,18 @@ const ChatScreen = () => {
     const senderPhotoUrl = senderPhotoKey ? resolveUrl(senderPhotoKey) : "";
     const senderInitial = (item.sender?.firstName || "?")[0].toUpperCase();
 
+    const handleShareAttachment = async (url: string, fileName?: string) => {
+      try {
+        await Share.share({
+          url: url,
+          title: fileName || "File",
+          message: `Check out this file: ${fileName || 'Download'}`,
+        });
+      } catch (error) {
+        console.error("Share failed:", error);
+      }
+    };
+
     return (
       <View
         style={[
@@ -523,22 +536,34 @@ const ChatScreen = () => {
             item.attachments.map((a: any) => (
               <View key={a.id} style={styles.attachment}>
                 {a.type === "image" ? (
-                  <Image
-                    source={{ uri: resolveUrl(a.url) }}
-                    style={styles.image}
-                  />
+                  <TouchableOpacity
+                    onPress={() => handleShareAttachment(resolveUrl(a.url), a.fileName)}
+                    activeOpacity={0.85}
+                    style={styles.imageWrapper}
+                  >
+                    <Image
+                      source={{ uri: resolveUrl(a.url) }}
+                      style={styles.image}
+                    />
+                    <View style={styles.imageOverlay}>
+                      <Feather name="download" size={24} color="#fff" />
+                    </View>
+                  </TouchableOpacity>
                 ) : (
-                  <View
+                  <TouchableOpacity
+                    onPress={() => handleShareAttachment(resolveUrl(a.url), a.fileName)}
                     style={[
                       styles.fileRow,
                       { backgroundColor: colors.inputBackground },
                     ]}
+                    activeOpacity={0.7}
                   >
                     <Feather name="file" size={16} color={colors.textSecondary} />
                     <Text style={[styles.fileName, { color: colors.textSecondary }]} numberOfLines={1}>
                       {a.fileName || "File"}
                     </Text>
-                  </View>
+                    <Feather name="download" size={14} color={colors.primary} style={{ marginLeft: "auto" }} />
+                  </TouchableOpacity>
                 )}
               </View>
             ))}
@@ -1337,6 +1362,20 @@ const styles = StyleSheet.create({
     width: moderateScale(180),
     height: moderateScale(120),
     borderRadius: moderateScale(8),
+  },
+  imageWrapper: {
+    position: "relative",
+  },
+  imageOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    borderRadius: moderateScale(8),
+    alignItems: "center",
+    justifyContent: "center",
   },
   fileRow: {
     flexDirection: "row",
