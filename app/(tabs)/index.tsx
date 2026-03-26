@@ -330,21 +330,35 @@ const Index = () => {
           }
           setIsOnBreak(derivedBreakState);
         }
-        const today = new Date().toISOString().split("T")[0];
-        const hasCheckInToday =
-          response.data.punchInTime &&
-          new Date(response.data.punchInTime).toISOString().split("T")[0] === today;
-        const hasCheckOutToday = response.data.logs.some(
-          (log: any) =>
-            log.type === "check-out" &&
-            new Date(log.timestamp).toISOString().split("T")[0] === today
+        const sortedLogs = [...response.data.logs].sort(
+          (a: any, b: any) =>
+            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
         );
-        const isCurrentlyCheckedIn = hasCheckInToday && !hasCheckOutToday;
+        const latestCheckIn = [...sortedLogs]
+          .reverse()
+          .find((log: any) => log.type === "check-in");
+        const latestCheckOut = [...sortedLogs]
+          .reverse()
+          .find((log: any) => log.type === "check-out");
+        let isCurrentlyCheckedIn = Boolean(latestCheckIn) && (
+          !latestCheckOut ||
+          new Date(latestCheckIn.timestamp).getTime() >
+            new Date(latestCheckOut.timestamp).getTime()
+        );
+        if (!latestCheckIn && response.data.punchInTime) {
+          const punchInMs = new Date(response.data.punchInTime).getTime();
+          const lastPunchMs = response.data.lastPunch
+            ? new Date(response.data.lastPunch).getTime()
+            : NaN;
+          isCurrentlyCheckedIn =
+            !response.data.lastPunch || punchInMs > lastPunchMs;
+        }
         setIsCheckedIn(isCurrentlyCheckedIn);
         console.log("🔄 isCheckedIn set to:", isCurrentlyCheckedIn);
       } else {
         console.warn("⚠️ No logs found in response:", response.data);
         setIsOnBreak(false);
+        setIsCheckedIn(false);
       }
     } catch (error) {
       console.log("❌ Failed to fetch attendance logs:", error);
@@ -885,7 +899,11 @@ const Index = () => {
   };
 
   const handleBreakToggle = async (): Promise<void> => {
-    if (!orgId || !userId || breakLoading || !hasCheckInToday) return;
+    if (!orgId || !userId || breakLoading) return;
+    if (!isCheckedIn && !isOnBreak) {
+      showDialog("INFO", "Check-In Required", "Please check in before using break.");
+      return;
+    }
     try {
       setBreakLoading(true);
       const timeRes = await getCurrentTime();
@@ -1272,14 +1290,10 @@ const Index = () => {
     }
   };
 
-  const today = new Date().toISOString().split("T")[0];
-  const hasCheckInToday = punchInTime && new Date(punchInTime).toISOString().split("T")[0] === today;
-  const hasCheckOutToday = attendanceLogs.some(
-    (log: any) =>
-      log.type === "check-out" &&
-      new Date(log.timestamp).toISOString().split("T")[0] === today
+  const hasCheckInToday = Boolean(
+    punchInTime || attendanceLogs.some((log: any) => log.type === "check-in")
   );
-  const showCheckInButton = !hasCheckInToday || hasCheckOutToday;
+  const showCheckInButton = !isCheckedIn;
   const isCheckInDisabled =
     !validationRulesLoaded ||
     (validationRules.enableWifiValidation && !isWifiValid) ||
@@ -1583,7 +1597,7 @@ const Index = () => {
                 styles.breakButton,
                 { backgroundColor: isOnBreak ? "#f59e0b" : "#22c55e" },
               ]}
-              disabled={!hasCheckInToday || breakLoading}
+              disabled={(!isCheckedIn && !isOnBreak) || breakLoading}
               onPress={handleBreakToggle}
             >
               {breakLoading ? (
@@ -1594,7 +1608,7 @@ const Index = () => {
                 </Text>
               )}
             </TouchableOpacity>
-            {!hasCheckInToday && (
+            {!isCheckedIn && !isOnBreak && (
               <Text style={[styles.status, { color: colors.textMuted }]}>Check in first</Text>
             )}
           </View>
