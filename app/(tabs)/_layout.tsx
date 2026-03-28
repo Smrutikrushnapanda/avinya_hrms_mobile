@@ -18,11 +18,100 @@ import {
 } from "react-native";
 import { NetworkInfo } from "react-native-network-info";
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
+import { getAuthProfile, getOrganizationPlan } from "../../api/api";
 import CustomDialog from "../components/CustomDialog";
 import { darkTheme, lightTheme } from "../constants/colors";
 import type { AppTheme } from "../constants/colors";
 
-const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+type OrganizationPlanType = "BASIC" | "PRO" | "ENTERPRISE" | null;
+
+type PlanSource = {
+  organizationId?: string | null;
+  employee?: { organizationId?: string | null };
+  organization?: {
+    id?: string | null;
+    planType?: string | number | null;
+    pricingTypeId?: string | number | null;
+    planName?: string | null;
+    pricingTypeName?: string | null;
+    pricingType?: {
+      typeId?: string | number | null;
+      typeName?: string | null;
+    };
+  };
+  planType?: string | number | null;
+  pricingTypeId?: string | number | null;
+  planName?: string | null;
+  pricingTypeName?: string | null;
+  pricingType?: {
+    typeId?: string | number | null;
+    typeName?: string | null;
+  };
+};
+
+function normalizeOrganizationPlanType(
+  planType?: string | number | null,
+  planName?: string | null
+): OrganizationPlanType {
+  const normalizedType =
+    planType == null ? "" : String(planType).trim().toUpperCase();
+
+  if (
+    normalizedType === "BASIC" ||
+    normalizedType === "PRO" ||
+    normalizedType === "ENTERPRISE"
+  ) {
+    return normalizedType as OrganizationPlanType;
+  }
+
+  const normalizedName =
+    typeof planName === "string" ? planName.trim().toUpperCase() : "";
+  if (normalizedName.includes("BASIC")) return "BASIC";
+  if (normalizedName.includes("PRO")) return "PRO";
+  if (normalizedName.includes("ENTERPRISE")) return "ENTERPRISE";
+
+  if (normalizedType === "1") return "BASIC";
+  if (normalizedType === "2") return "PRO";
+  if (normalizedType === "3") return "ENTERPRISE";
+
+  return null;
+}
+
+function extractPlanFromSource(source?: PlanSource | null): {
+  organizationId: string | null;
+  planType: OrganizationPlanType;
+  planName: string | null;
+} {
+  const organizationId =
+    source?.organizationId ??
+    source?.organization?.id ??
+    source?.employee?.organizationId ??
+    null;
+
+  const planName =
+    source?.planName ??
+    source?.pricingTypeName ??
+    source?.pricingType?.typeName ??
+    source?.organization?.planName ??
+    source?.organization?.pricingTypeName ??
+    source?.organization?.pricingType?.typeName ??
+    null;
+
+  const planType = normalizeOrganizationPlanType(
+    source?.planType ??
+      source?.pricingTypeId ??
+      source?.pricingType?.typeId ??
+      source?.organization?.planType ??
+      source?.organization?.pricingTypeId ??
+      source?.organization?.pricingType?.typeId ??
+      null,
+    planName
+  );
+
+  return { organizationId, planType, planName };
+}
 
 // ─── Animated Tab Icon ────────────────────────────────────────────────────────
 const AnimatedTabIcon = ({
@@ -258,6 +347,8 @@ const TabLayout = () => {
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
   const tabActiveColor = colors.primary;
   const tabInactiveColor = colors.textMuted;
+  const [planType, setPlanType] = useState<OrganizationPlanType>(null);
+  const isBasicPlan = planType === "BASIC";
 
   const router = useRouter();
   const [isBottomSheetVisible, setIsBottomSheetVisible] = useState(false);
@@ -356,6 +447,54 @@ const TabLayout = () => {
       console.log("SSID:", ssid, "BSSID:", bssid);
     };
     checkWifiInfo();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadPlanType = async () => {
+      try {
+        const profileRes = await getAuthProfile();
+        const profileData = (profileRes?.data ?? null) as PlanSource | null;
+        const fromProfile = extractPlanFromSource(profileData);
+
+        let resolvedPlanType = fromProfile.planType;
+
+        if (!resolvedPlanType && fromProfile.organizationId) {
+          try {
+            const orgPlanRes = await getOrganizationPlan(fromProfile.organizationId);
+            const orgPlan = (orgPlanRes?.data ?? null) as {
+              planType?: string | number | null;
+              pricingTypeId?: string | number | null;
+              name?: string | null;
+              planName?: string | null;
+            } | null;
+
+            resolvedPlanType = normalizeOrganizationPlanType(
+              orgPlan?.planType ?? orgPlan?.pricingTypeId ?? null,
+              orgPlan?.name ?? orgPlan?.planName ?? fromProfile.planName
+            );
+          } catch (error) {
+            console.log("Failed to load organization plan:", error);
+          }
+        }
+
+        if (active) {
+          setPlanType(resolvedPlanType);
+        }
+      } catch (error) {
+        console.log("Failed to resolve plan type:", error);
+        if (active) {
+          setPlanType(null);
+        }
+      }
+    };
+
+    loadPlanType();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const serviceItems = [
@@ -520,21 +659,28 @@ const TabLayout = () => {
               ),
             }}
           />
-          <Tabs.Screen
-            name="services"
-            options={{
-              title: "Services",
-              tabBarButton: () => (
-                <CenterTabButton onPress={openBottomSheet} colors={colors} />
-              ),
-            }}
-            listeners={{
-              tabPress: (e) => {
-                e.preventDefault();
-                openBottomSheet();
-              },
-            }}
-          />
+          {!isBasicPlan ? (
+            <Tabs.Screen
+              name="services"
+              options={{
+                title: "Services",
+                tabBarButton: () => (
+                  <CenterTabButton onPress={openBottomSheet} colors={colors} />
+                ),
+              }}
+              listeners={{
+                tabPress: (e) => {
+                  e.preventDefault();
+                  openBottomSheet();
+                },
+              }}
+            />
+          ) : (
+            <Tabs.Screen
+              name="services"
+              options={{ href: null }}
+            />
+          )}
           <Tabs.Screen
             name="leave"
             options={{
@@ -549,6 +695,27 @@ const TabLayout = () => {
               ),
             }}
           />
+          {isBasicPlan ? (
+            <Tabs.Screen
+              name="wfh"
+              options={{
+                title: "WFH",
+                tabBarIcon: ({ color, focused }) => (
+                  <AnimatedTabIcon name="home" color={color} focused={focused} />
+                ),
+                tabBarLabel: ({ focused }) => (
+                  <Text style={{ color: focused ? tabActiveColor : tabInactiveColor, fontSize: moderateScale(12), fontWeight: "500" }}>
+                    WFH
+                  </Text>
+                ),
+              }}
+            />
+          ) : (
+            <Tabs.Screen
+              name="wfh"
+              options={{ href: null }}
+            />
+          )}
           <Tabs.Screen
             name="TimeSlips"
             options={{
@@ -567,10 +734,6 @@ const TabLayout = () => {
                 router.push("/(tabs)/TimeSlips");
               },
             }}
-          />
-          <Tabs.Screen
-            name="wfh"
-            options={{ href: null }}
           />
         </Tabs>
 

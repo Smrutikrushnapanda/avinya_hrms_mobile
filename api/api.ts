@@ -85,6 +85,11 @@ export const getOrganization = (organizationId: string) => {
   return api.get(`/organizations/${organizationId}`);
 };
 
+// ✅ Organization Plan API - Get active pricing plan by organization ID
+export const getOrganizationPlan = (organizationId: string) => {
+  return api.get(`/pricing/organizations/${organizationId}/plan`);
+};
+
 
 // ✅ Log Attendance API - Submit attendance with location, WiFi, and photo
 export const logAttendance = async (data: {
