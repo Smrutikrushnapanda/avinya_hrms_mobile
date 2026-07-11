@@ -15,11 +15,9 @@ import useAuthStore from "../../store/useUserStore";
 import useMessageStore from "../../store/useMessageStore";
 import { io, Socket } from "socket.io-client";
 import HeaderBackground from "./HeaderBackground";
+import { socketURL as SOCKET_URL } from "utils/apiConfig";
 
-const SOCKET_URL =
-  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinyahrms.duckdns.org";
-
-const Header = ({ title = "", compact = false }: { title?: string; compact?: boolean }) => {
+const Header = ({ title = "", compact = false, showBack = true }: { title?: string; compact?: boolean; showBack?: boolean }) => {
   const colorScheme = useColorScheme() ?? "light";
   const isDarkMode = colorScheme === "dark";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
@@ -73,19 +71,21 @@ const Header = ({ title = "", compact = false }: { title?: string; compact?: boo
       <View style={[styles.header, compact && styles.headerCompact]}>
         <View style={styles.headerContent}>
           {/* Back Button */}
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-          >
-            <View
-              style={[
-                styles.backCircle,
-                { backgroundColor: controlBg, borderColor: controlBorder },
-              ]}
+          {showBack && (
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
             >
-              <Ionicons name="arrow-back" size={20} color={controlIconColor} />
-            </View>
-          </TouchableOpacity>
+              <View
+                style={[
+                  styles.backCircle,
+                  { backgroundColor: controlBg, borderColor: controlBorder },
+                ]}
+              >
+                <Ionicons name="arrow-back" size={20} color={controlIconColor} />
+              </View>
+            </TouchableOpacity>
+          )}
 
           {/* Title (moved next to back icon) */}
           <View style={styles.titleWrapper}>

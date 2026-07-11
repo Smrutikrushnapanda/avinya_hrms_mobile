@@ -1,6 +1,6 @@
-import { FontAwesome5 } from "@expo/vector-icons";
-import { Tabs, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
@@ -15,15 +15,18 @@ import {
   TouchableOpacity,
   View,
   useColorScheme,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
 } from "react-native";
 import { NetworkInfo } from "react-native-network-info";
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import { getAuthProfile, getOrganizationPlan } from "../../api/api";
+import useAuthStore from "../../store/useUserStore";
 import CustomDialog from "../components/CustomDialog";
 import { darkTheme, lightTheme } from "../constants/colors";
 import type { AppTheme } from "../constants/colors";
 
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 type OrganizationPlanType = "BASIC" | "PRO" | "ENTERPRISE" | null;
 
@@ -52,8 +55,7 @@ type PlanSource = {
 };
 
 function normalizeOrganizationPlanType(
-  planType?: string | number | null,
-  planName?: string | null
+  planType?: string | number | null
 ): OrganizationPlanType {
   const normalizedType =
     planType == null ? "" : String(planType).trim().toUpperCase();
@@ -66,12 +68,6 @@ function normalizeOrganizationPlanType(
     return normalizedType as OrganizationPlanType;
   }
 
-  const normalizedName =
-    typeof planName === "string" ? planName.trim().toUpperCase() : "";
-  if (normalizedName.includes("BASIC")) return "BASIC";
-  if (normalizedName.includes("PRO")) return "PRO";
-  if (normalizedName.includes("ENTERPRISE")) return "ENTERPRISE";
-
   if (normalizedType === "1") return "BASIC";
   if (normalizedType === "2") return "PRO";
   if (normalizedType === "3") return "ENTERPRISE";
@@ -82,21 +78,11 @@ function normalizeOrganizationPlanType(
 function extractPlanFromSource(source?: PlanSource | null): {
   organizationId: string | null;
   planType: OrganizationPlanType;
-  planName: string | null;
 } {
   const organizationId =
     source?.organizationId ??
     source?.organization?.id ??
     source?.employee?.organizationId ??
-    null;
-
-  const planName =
-    source?.planName ??
-    source?.pricingTypeName ??
-    source?.pricingType?.typeName ??
-    source?.organization?.planName ??
-    source?.organization?.pricingTypeName ??
-    source?.organization?.pricingType?.typeName ??
     null;
 
   const planType = normalizeOrganizationPlanType(
@@ -106,11 +92,10 @@ function extractPlanFromSource(source?: PlanSource | null): {
       source?.organization?.planType ??
       source?.organization?.pricingTypeId ??
       source?.organization?.pricingType?.typeId ??
-      null,
-    planName
+      null
   );
 
-  return { organizationId, planType, planName };
+  return { organizationId, planType };
 }
 
 // ─── Animated Tab Icon ────────────────────────────────────────────────────────
@@ -170,9 +155,11 @@ const AnimatedTabIcon = ({
     }
   }, [focused]);
 
+  const iconName = (focused ? name : `${name}-outline`) as any;
+
   return (
     <Animated.View style={{ transform: [{ scale }, { translateY }] }}>
-      <FontAwesome5 name={name} size={20} color={color} solid={focused} />
+      <Ionicons name={iconName} size={22} color={color} />
     </Animated.View>
   );
 };
@@ -268,11 +255,10 @@ const ServiceItemButton = ({
         ]}
       >
         <View style={styles.serviceIconContainer}>
-          <FontAwesome5
+          <Ionicons
             name={item.icon}
             size={24}
             color={item.disabled ? colors.textMuted : item.color}
-            solid
           />
         </View>
         <Text
@@ -288,69 +274,18 @@ const ServiceItemButton = ({
   );
 };
 
-// ─── Center Tab Button (FAB style from old UI) ────────────────────────────────
-const CenterTabButton = ({
-  onPress,
-  colors,
-}: {
-  onPress: () => void;
-  colors: AppTheme;
-}) => {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const handlePress = () => {
-    Animated.sequence([
-      Animated.spring(scale, {
-        toValue: 0.9,
-        useNativeDriver: true,
-        tension: 300,
-        friction: 10,
-      }),
-      Animated.spring(scale, {
-        toValue: 1,
-        useNativeDriver: true,
-        tension: 200,
-        friction: 8,
-      }),
-    ]).start();
-    onPress();
-  };
-
-  return (
-    <View style={styles.fabContainer}>
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={handlePress}
-        style={styles.fabButton}
-      >
-        <Animated.View
-          style={[
-            styles.fabCircle,
-            {
-              transform: [{ scale }],
-              backgroundColor: colors.primary,
-              borderColor: colors.surface,
-            },
-          ]}
-        >
-          <FontAwesome5 name="th-large" size={22} color={colors.onPrimary} />
-        </Animated.View>
-      </TouchableOpacity>
-      <Text style={[styles.fabLabel, { color: colors.primary }]}>Services</Text>
-    </View>
-  );
-};
-
 // ─── Main Tab Layout ──────────────────────────────────────────────────────────
 const TabLayout = () => {
   const colorScheme = useColorScheme() ?? "light";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
   const tabActiveColor = colors.primary;
   const tabInactiveColor = colors.textMuted;
-  const [planType, setPlanType] = useState<OrganizationPlanType>(null);
+  const { user } = useAuthStore();
+  const [planType, setPlanType] = useState<OrganizationPlanType>(() => {
+    return normalizeOrganizationPlanType(user?.planType ?? null);
+  });
   const isBasicPlan = planType === "BASIC";
 
-  const router = useRouter();
   const [isBottomSheetVisible, setIsBottomSheetVisible] = useState(false);
   const [sheetAnimVisible, setSheetAnimVisible] = useState(false);
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -361,6 +296,26 @@ const TabLayout = () => {
   const [dialogType, setDialogType] = useState<
     "SUCCESS" | "DANGER" | "WARNING" | "INFO"
   >("INFO");
+  const flatListRef = useRef<Animated.FlatList<any>>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const tabRoutes = useMemo(
+    () =>
+      isBasicPlan
+        ? ["index", "attendance", "leave", "wfh", "TimeSlips"]
+        : ["index", "attendance", "leave", "TimeSlips"],
+    [isBasicPlan]
+  );
+
+  const tabBarItems = useMemo(
+    () =>
+      isBasicPlan
+        ? ["index", "attendance", "leave", "wfh", "TimeSlips"]
+        : ["index", "attendance", "services", "leave", "TimeSlips"],
+    [isBasicPlan]
+  );
+
+  const router = useRouter();
 
   const openBottomSheet = () => {
     setIsBottomSheetVisible(true);
@@ -432,7 +387,15 @@ const TabLayout = () => {
   });
 
   useEffect(() => {
+    const cachedPlanType = normalizeOrganizationPlanType(user?.planType ?? null);
+    if (cachedPlanType && cachedPlanType !== planType) {
+      setPlanType(cachedPlanType);
+    }
+  }, [user?.planType, planType]);
+
+  useEffect(() => {
     const checkWifiInfo = async () => {
+      if (Platform.OS === "web" || !NetworkInfo) return;
       if (Platform.OS === "android") {
         const granted = await PermissionsAndroid.request(
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
@@ -442,9 +405,13 @@ const TabLayout = () => {
           return;
         }
       }
-      const ssid = await NetworkInfo.getSSID();
-      const bssid = await NetworkInfo.getBSSID();
-      console.log("SSID:", ssid, "BSSID:", bssid);
+      try {
+        const ssid = await NetworkInfo.getSSID();
+        const bssid = await NetworkInfo.getBSSID();
+        console.log("SSID:", ssid, "BSSID:", bssid);
+      } catch (e) {
+        console.log("Error fetching WiFi info:", e);
+      }
     };
     checkWifiInfo();
   }, []);
@@ -468,25 +435,34 @@ const TabLayout = () => {
               pricingTypeId?: string | number | null;
               name?: string | null;
               planName?: string | null;
+              pricingTypeName?: string | null;
+              plan?: {
+                planType?: string | number | null;
+                pricingTypeId?: string | number | null;
+                name?: string | null;
+                planName?: string | null;
+              };
             } | null;
 
-            resolvedPlanType = normalizeOrganizationPlanType(
-              orgPlan?.planType ?? orgPlan?.pricingTypeId ?? null,
-              orgPlan?.name ?? orgPlan?.planName ?? fromProfile.planName
-            );
+            if (orgPlan) {
+              resolvedPlanType = normalizeOrganizationPlanType(
+                orgPlan.planType ??
+                  orgPlan.pricingTypeId ??
+                  orgPlan.plan?.planType ??
+                  orgPlan.plan?.pricingTypeId ??
+                  null
+              );
+            }
           } catch (error) {
             console.log("Failed to load organization plan:", error);
           }
         }
 
         if (active) {
-          setPlanType(resolvedPlanType);
+          setPlanType((current) => resolvedPlanType ?? current ?? null);
         }
       } catch (error) {
         console.log("Failed to resolve plan type:", error);
-        if (active) {
-          setPlanType(null);
-        }
       }
     };
 
@@ -498,14 +474,14 @@ const TabLayout = () => {
   }, []);
 
   const serviceItems = [
-    { icon: "calendar-check", name: "Attend",   color: colors.primary, disabled: false },
-    { icon: "calendar-alt",   name: "Leave",    color: colors.primary, disabled: false },
-    { icon: "comment-alt",    name: "Messages", color: colors.primary, disabled: false },
-    { icon: "credit-card",    name: "Payslips", color: colors.primary, disabled: false },
-    { icon: "home",           name: "WFH",      color: colors.primary, disabled: false },
-    { icon: "newspaper",      name: "Posts",    color: colors.primary, disabled: false },
-    { icon: "file-alt",       name: "Policies", color: colors.primary, disabled: false },
-    { icon: "question-circle",name: "Help",     color: colors.textMuted, disabled: true  },
+    { icon: "checkmark-done-outline", name: "Attend",   color: colors.primary, disabled: false },
+    { icon: "calendar-outline",       name: "Leave",    color: colors.primary, disabled: false },
+    { icon: "chatbubble-ellipses-outline", name: "Messages", color: colors.primary, disabled: false },
+    { icon: "card-outline",           name: "Payslips", color: colors.primary, disabled: false },
+    { icon: "laptop-outline",         name: "WFH",      color: colors.primary, disabled: false },
+    { icon: "newspaper-outline",      name: "Posts",    color: colors.primary, disabled: false },
+    { icon: "document-text-outline",  name: "Policies", color: colors.primary, disabled: false },
+    { icon: "help-circle-outline",    name: "Help",     color: colors.textMuted, disabled: true  },
   ];
 
   const handleServicePress = (item: any) => {
@@ -517,7 +493,7 @@ const TabLayout = () => {
       return;
     }
     closeBottomSheet();
-    const routes: Record<string, string> = {
+    const routeMap: Record<string, string> = {
       Attend:   "/(tabs)/attendance",
       Leave:    "/(tabs)/leave",
       WFH:      "/(tabs)/wfh",
@@ -527,10 +503,28 @@ const TabLayout = () => {
       Posts:    "/(screen)/posts",
       Policies: "/(tabs)/services",
     };
-    if (routes[item.name]) {
-      setTimeout(() => router.push(routes[item.name] as any), 350);
+    if (routeMap[item.name]) {
+      setTimeout(() => router.push(routeMap[item.name] as any), 350);
     }
   };
+
+  const tabLabels = useMemo(
+    () =>
+      isBasicPlan
+        ? ["Home", "Attendance", "Leave", "WFH", "Time Slip"]
+        : ["Home", "Attendance", "Services", "Leave", "Time Slip"],
+    [isBasicPlan]
+  );
+
+  const scrollX = useRef(new Animated.Value(0)).current;
+
+  const onMomentumEnd = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+      if (idx !== activeIndex) setActiveIndex(idx);
+    },
+    [activeIndex]
+  );
 
   return (
     <>
@@ -568,7 +562,6 @@ const TabLayout = () => {
               ]}
               {...panResponder.panHandlers}
             >
-              {/* Drag handle */}
               <View style={[styles.dragHandle, { backgroundColor: colors.primary }]} />
 
               <ScrollView
@@ -576,16 +569,14 @@ const TabLayout = () => {
                 showsVerticalScrollIndicator={false}
               >
                 <View style={styles.sheetContent}>
-                  {/* Header */}
                   <View style={styles.sheetHeader}>
-                    <FontAwesome5 name="th-large" size={24} color={colors.primary} />
+                    <Ionicons name="grid" size={24} color={colors.primary} />
                     <Text style={[styles.sheetTitle, { color: colors.primary }]}>Services</Text>
                     <Text style={[styles.sheetDescription, { color: colors.textSecondary }]}>
                       Select a service from the options below
                     </Text>
                   </View>
 
-                  {/* Services grid */}
                   <View style={styles.servicesGrid}>
                     {serviceItems.map((item, index) => (
                       <ServiceItemButton
@@ -604,138 +595,101 @@ const TabLayout = () => {
           </View>
         </Modal>
 
-        {/* ── Tab Navigator ── */}
-        <Tabs
-          screenOptions={{
-            headerShown: false,
-            tabBarShowLabel: true,
-            tabBarActiveTintColor: tabActiveColor,
-            tabBarInactiveTintColor: tabInactiveColor,
-            tabBarStyle: {
-              height: verticalScale(64),
-              paddingBottom: verticalScale(6),
-              paddingTop: verticalScale(6),
-              borderTopWidth: 1,
-              borderTopColor: colors.border,
-              backgroundColor: colors.surface,
-              shadowColor: colors.shadow,
-              shadowOpacity: 0.08,
-              shadowRadius: 12,
-              shadowOffset: { width: 0, height: -4 },
-              elevation: 12,
-            },
-            tabBarLabelStyle: {
-              fontSize: moderateScale(12),
-              fontWeight: "500",
-              marginBottom: verticalScale(0),
-            },
+        {/* Paged horizontal scroll — Instagram-like smoothness */}
+        <Animated.FlatList
+          ref={flatListRef}
+          data={tabRoutes}
+          keyExtractor={(item) => item}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          bounces={false}
+          scrollEventThrottle={32}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+            { useNativeDriver: true }
+          )}
+          onMomentumScrollEnd={onMomentumEnd}
+          renderItem={({ item: route }) => {
+            const pageIndex = tabRoutes.indexOf(route);
+            const distance = Math.abs(pageIndex - activeIndex);
+            const shouldRender = distance <= 1;
+            const Screen = TAB_SCREENS[route];
+            return (
+              <View style={{ width: SCREEN_WIDTH, flex: 1, backgroundColor: colors.background }}>
+                {shouldRender && Screen ? <Screen /> : <View style={{ flex: 1 }} />}
+              </View>
+            );
           }}
+        />
+
+        {/* ── Custom Tab Bar (bottom) ── */}
+        <View
+          style={[
+            styles.tabBar,
+            {
+              backgroundColor: colors.surface,
+              borderTopColor: colors.border,
+              shadowColor: colors.shadow,
+            },
+          ]}
         >
-          <Tabs.Screen
-            name="index"
-            options={{
-              title: "Home",
-              tabBarIcon: ({ color, focused }) => (
-                <AnimatedTabIcon name="home" color={color} focused={focused} />
-              ),
-              tabBarLabel: ({ focused }) => (
-                <Text style={{ color: focused ? tabActiveColor : tabInactiveColor, fontSize: moderateScale(12), fontWeight: "500" }}>
-                  Home
+          {tabBarItems.map((route, idx) => {
+            const isServicesTab = route === "services";
+            const pageIndex = tabRoutes.indexOf(route);
+            const isFocused = isServicesTab ? false : activeIndex === pageIndex;
+            let icon = "home";
+            if (route === "attendance") icon = "checkmark-done-circle";
+            else if (route === "leave") icon = "calendar";
+            else if (route === "wfh") icon = "laptop";
+            else if (route === "TimeSlips") icon = "time";
+            else if (route === "services") icon = "grid";
+
+            return (
+              <TouchableOpacity
+                key={route}
+                style={styles.tabItem}
+                activeOpacity={0.7}
+                onPress={() => {
+                  if (isServicesTab) {
+                    openBottomSheet();
+                  } else {
+                    flatListRef.current?.scrollToOffset({
+                      offset: pageIndex * SCREEN_WIDTH,
+                      animated: true,
+                    });
+                    setActiveIndex(pageIndex);
+                  }
+                }}
+              >
+                {isServicesTab ? (
+                  <View style={[styles.serviceGlow, { shadowColor: colors.primary }]}>
+                    <View style={[styles.serviceCircle, { backgroundColor: colors.primary, borderColor: colors.surface }]}>
+                      <Ionicons name="grid" size={22} color={colors.onPrimary} />
+                    </View>
+                  </View>
+                ) : (
+                  <AnimatedTabIcon
+                    name={icon}
+                    color={isFocused ? tabActiveColor : tabInactiveColor}
+                    focused={isFocused}
+                  />
+                )}
+                <Text
+                  style={{
+                    fontSize: moderateScale(11),
+                    fontWeight: isFocused ? "700" : "500",
+                    color: isFocused ? tabActiveColor : tabInactiveColor,
+                    marginTop: isServicesTab ? 4 : 2,
+                  }}
+                >
+                  {tabLabels[idx]}
                 </Text>
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="attendance"
-            options={{
-              title: "Attendance",
-              tabBarIcon: ({ color, focused }) => (
-                <AnimatedTabIcon name="calendar-check" color={color} focused={focused} />
-              ),
-              tabBarLabel: ({ focused }) => (
-                <Text style={{ color: focused ? tabActiveColor : tabInactiveColor, fontSize: moderateScale(12), fontWeight: "500" }}>
-                  Attendance
-                </Text>
-              ),
-            }}
-          />
-          {!isBasicPlan ? (
-            <Tabs.Screen
-              name="services"
-              options={{
-                title: "Services",
-                tabBarButton: () => (
-                  <CenterTabButton onPress={openBottomSheet} colors={colors} />
-                ),
-              }}
-              listeners={{
-                tabPress: (e) => {
-                  e.preventDefault();
-                  openBottomSheet();
-                },
-              }}
-            />
-          ) : (
-            <Tabs.Screen
-              name="services"
-              options={{ href: null }}
-            />
-          )}
-          <Tabs.Screen
-            name="leave"
-            options={{
-              title: "Leave",
-              tabBarIcon: ({ color, focused }) => (
-                <AnimatedTabIcon name="calendar-minus" color={color} focused={focused} />
-              ),
-              tabBarLabel: ({ focused }) => (
-                <Text style={{ color: focused ? tabActiveColor : tabInactiveColor, fontSize: moderateScale(12), fontWeight: "500" }}>
-                  Leave
-                </Text>
-              ),
-            }}
-          />
-          {isBasicPlan ? (
-            <Tabs.Screen
-              name="wfh"
-              options={{
-                title: "WFH",
-                tabBarIcon: ({ color, focused }) => (
-                  <AnimatedTabIcon name="home" color={color} focused={focused} />
-                ),
-                tabBarLabel: ({ focused }) => (
-                  <Text style={{ color: focused ? tabActiveColor : tabInactiveColor, fontSize: moderateScale(12), fontWeight: "500" }}>
-                    WFH
-                  </Text>
-                ),
-              }}
-            />
-          ) : (
-            <Tabs.Screen
-              name="wfh"
-              options={{ href: null }}
-            />
-          )}
-          <Tabs.Screen
-            name="TimeSlips"
-            options={{
-              title: "Time Slip",
-              tabBarIcon: ({ color, focused }) => (
-                <AnimatedTabIcon name="clock" color={color} focused={focused} />
-              ),
-              tabBarLabel: ({ focused }) => (
-                <Text style={{ color: focused ? tabActiveColor : tabInactiveColor, fontSize: moderateScale(12), fontWeight: "500" }}>
-                  Time Slip
-                </Text>
-              ),
-            }}
-            listeners={{
-              tabPress: () => {
-                router.push("/(tabs)/TimeSlips");
-              },
-            }}
-          />
-        </Tabs>
+              </TouchableOpacity>
+            );
+          })}
+          
+        </View>
 
         <CustomDialog
           isVisible={dialogVisible}
@@ -749,9 +703,61 @@ const TabLayout = () => {
   );
 };
 
+// ─── Static tab screen imports (required for Metro bundler) ────────────────────
+import HomeTab from "./index";
+import AttendanceTab from "./attendance";
+import LeaveTab from "./leave";
+import WfhTab from "./wfh";
+import TimeSlipsTab from "./TimeSlips";
+
+const TAB_SCREENS: Record<string, React.ComponentType> = {
+  index: HomeTab,
+  attendance: AttendanceTab,
+  leave: LeaveTab,
+  wfh: WfhTab,
+  TimeSlips: TimeSlipsTab,
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+
+  // ── Tab Bar (bottom) ──
+  tabBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: verticalScale(64),
+    paddingBottom: verticalScale(6),
+    paddingTop: verticalScale(6),
+    borderTopWidth: 1,
+    elevation: 12,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: verticalScale(2),
+  },
+  serviceGlow: {
+    alignItems: "center",
+    justifyContent: "center",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 10,
+    marginTop: verticalScale(-10),
+  },
+  serviceCircle: {
+    width: horizontalScale(48),
+    height: horizontalScale(48),
+    borderRadius: horizontalScale(24),
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2.5,
   },
 
   // ── Modal / Sheet ──
@@ -833,35 +839,11 @@ const styles = StyleSheet.create({
     lineHeight: moderateScale(14),
   },
 
-  // ── FAB Center Button ──
-  fabContainer: {
+  // ── Tab Content Placeholder ──
+  tabPlaceholder: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    marginTop: verticalScale(-35),
-  },
-  fabButton: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  fabCircle: {
-    width: horizontalScale(56),
-    height: horizontalScale(56),
-    borderRadius: horizontalScale(28),
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    borderWidth: 3,
-  },
-  fabLabel: {
-    marginTop: verticalScale(4),
-    fontSize: moderateScale(11),
-    fontWeight: "500",
-    textAlign: "center",
   },
 });
 

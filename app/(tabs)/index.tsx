@@ -27,13 +27,14 @@ import {
   useColorScheme,
 } from "react-native";
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
-import { getCurrentTime, getOrganization, logAttendance, todayLogs, toggleBreakStatus } from "../../api/api";
+import { getAttendanceSettings, getCurrentTime, logAttendance, todayLogs, toggleBreakStatus } from "../../api/api";
 import { CACHE_TTL, withCache, invalidateCache } from "utils/apiCache";
 import useAuthStore from "../../store/useUserStore";
 import CustomDialog from "../components/CustomDialog";
 import HomeCard from "../components/HomeCard";
 import TabHeader from "../components/TabHeader";
 import { darkTheme, lightTheme } from "../constants/colors";
+import SmoothScreenWrapper from "../components/SmoothScreenWrapper";
 
 const Index = () => {
   const colorScheme = useColorScheme() || "light";
@@ -86,6 +87,7 @@ const Index = () => {
   const [initializationRetryCount, setInitializationRetryCount] = useState<number>(0);
   const [workingHours, setWorkingHours] = useState<string>("0:00:00 hours");
   const [showMessageModal, setShowMessageModal] = useState<boolean>(false);
+  
   const [breakLoading, setBreakLoading] = useState<boolean>(false);
   const [validationRules, setValidationRules] = useState<{
     enableWifiValidation: boolean;
@@ -122,17 +124,20 @@ const Index = () => {
   const fetchOrgValidationRules = async () => {
     if (!orgId) return;
     try {
-      // Cache org settings for 15 min – they almost never change mid-session
+      // Read from the same AttendanceSettings the backend actually enforces
+      // against (not the `organizations` table, which was only a best-effort
+      // mirror of these two flags and could silently drift out of sync).
+      // Cache for 15 min – they almost never change mid-session.
       const response = await withCache(
-        `org_settings_${orgId}`,
+        `attendance_settings_${orgId}`,
         CACHE_TTL.ORG_SETTINGS,
-        () => getOrganization(orgId),
+        () => getAttendanceSettings(orgId),
       );
-      const org = response.data || {};
+      const settings = response.data || {};
       const enableWifiValidation =
-        typeof org.enableWifiValidation === "boolean" ? org.enableWifiValidation : true;
+        typeof settings.enableWifiValidation === "boolean" ? settings.enableWifiValidation : true;
       const enableGPSValidation =
-        typeof org.enableGpsValidation === "boolean" ? org.enableGpsValidation : true;
+        typeof settings.enableGpsValidation === "boolean" ? settings.enableGpsValidation : true;
       setValidationRules({ enableWifiValidation, enableGPSValidation });
       setValidationRulesLoaded(true);
       if (!enableWifiValidation) {
@@ -414,8 +419,8 @@ const Index = () => {
         const parsedLocation = JSON.parse(cachedLocationData);
         setCachedLocation(parsedLocation);
         setIsLocationValid(true);
-        return true;
       }
+      // Always proceed to verify current GPS location even when cache exists
       let permissionResult;
       try {
         permissionResult = await Location.requestForegroundPermissionsAsync();
@@ -768,7 +773,7 @@ const Index = () => {
           log.type === "check-out" &&
           new Date(log.timestamp).toISOString().split("T")[0] === new Date().toISOString().split("T")[0]
       );
-      const endTime = hasCheckOutToday && lastPunch ? new Date(lastPunch) : new Date();
+      const endTime = hasCheckOutToday && lastPunch ? new Date(lastPunch) : (hasCheckOutToday ? checkInTime : new Date());
       const diffMs = endTime.getTime() - checkInTime.getTime();
       const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
       const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
@@ -909,15 +914,25 @@ const Index = () => {
       const timeRes = await getCurrentTime();
       const timestamp = timeRes?.data?.isoTime || new Date().toISOString();
       const deviceInfo = `${Platform.OS} ${Platform.Version}`;
+      // Re-fetch fresh location and WiFi for break toggle
+      const [freshWifi, freshLocation] = await Promise.all([
+        validationRules.enableWifiValidation ? getWifiDetails(true) : Promise.resolve(cachedWifi),
+        (async () => {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== "granted") return cachedLocation;
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced, timeout: 8000 });
+          return { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+        })(),
+      ]);
       const response = await toggleBreakStatus({
         organizationId: orgId,
         userId: userId,
         source: "mobile",
         timestamp,
-        latitude: cachedLocation?.latitude,
-        longitude: cachedLocation?.longitude,
-        wifiSsid: validationRules.enableWifiValidation ? cachedWifi?.ssid : undefined,
-        wifiBssid: validationRules.enableWifiValidation ? cachedWifi?.bssid : undefined,
+        latitude: freshLocation?.latitude ?? cachedLocation?.latitude,
+        longitude: freshLocation?.longitude ?? cachedLocation?.longitude,
+        wifiSsid: validationRules.enableWifiValidation ? (freshWifi?.ssid || cachedWifi?.ssid) : undefined,
+        wifiBssid: validationRules.enableWifiValidation ? (freshWifi?.bssid || cachedWifi?.bssid) : undefined,
         deviceInfo,
       });
       setIsOnBreak(Boolean(response?.data?.isOnBreak));
@@ -1013,7 +1028,9 @@ const Index = () => {
       console.log("Step 1: Validating WiFi and location...");
       const shouldValidateWifi = validationRules.enableWifiValidation;
       const shouldValidateGPS = validationRules.enableGPSValidation;
-      let wifiDetails = cachedWifi;
+      let wifiDetails = cachedWifi && cachedWifi.isValid
+        ? await getWifiDetails(true)
+        : cachedWifi;
       let latitude: number | undefined = cachedLocation?.latitude;
       let longitude: number | undefined = cachedLocation?.longitude;
       let locationAddress: string | undefined;
@@ -1168,7 +1185,8 @@ const Index = () => {
                 setIsSubmitting(false);
                 setPreviewImage(null);
                 setCheckoutMode(false);
-                fetchAttendanceLogs();
+                invalidateCache(`today_logs_${orgId}_${userId}`);
+                fetchAttendanceLogs(true);
               },
             },
           ]);
@@ -1427,8 +1445,8 @@ const Index = () => {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <MessageModal isVisible={showMessageModal} onClose={() => setShowMessageModal(false)} />
+    <SmoothScreenWrapper style={[styles.container, { backgroundColor: colors.background }]}>
+      <MessageModal onClose={() => setShowMessageModal(false)} />
       <TabHeader />
       <ScrollView
         style={styles.scrollContainer}
@@ -1437,12 +1455,11 @@ const Index = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
         }
         showsVerticalScrollIndicator={false}
+        directionalLockEnabled
+        keyboardShouldPersistTaps="handled"
       >
         <HomeCard
-          currentDate={currentDate}
-          formattedTime={formattedTime}
-          timePeriod={timePeriod}
-          userName={user?.name || user?.firstName || "User"}
+          userName={(user as any)?.name || user?.firstName || "User"}
           isCheckedIn={isCheckedIn}
           punchInTime={punchInTime}
           lastPunch={lastPunch}
@@ -1452,7 +1469,6 @@ const Index = () => {
           isLocationValid={isLocationValid}
           showWifiStatus={validationRulesLoaded && validationRules.enableWifiValidation}
           showLocationStatus={validationRulesLoaded && validationRules.enableGPSValidation}
-          showCheckInButton={showCheckInButton}
           isCheckInDisabled={isCheckInDisabled}
           handleCheckIn={handleCheckIn}
           handleCheckOut={handleCheckOut}
@@ -1461,144 +1477,167 @@ const Index = () => {
           formatTime={formatTime}
         />
         <View style={styles.row}>
-          <Text style={[styles.sectionDetails, { color: colors.text }]}>Today Attendance</Text>
+          <Text style={[styles.sectionDetails, { color: colors.text }]}>Today's Overview</Text>
           <TouchableOpacity onPress={() => route.push("/(tabs)/attendance")}>
             <Text style={[styles.viewall, { color: colors.primary }]}>View all</Text>
           </TouchableOpacity>
         </View>
-        <View
-          style={[
-            styles.attendanceCard,
-            { backgroundColor: colors.white, borderColor: colors.border },
-          ]}
-        >
-          <View style={styles.iconContainer}>
+        <View style={styles.overviewGrid}>
+          {/* Punch In Card */}
+          <View
+            style={[
+              styles.overviewCard,
+              { backgroundColor: isDarkMode ? "rgba(59,130,246,0.12)" : "#EFF6FF" },
+            ]}
+          >
             <View
               style={[
-                styles.iconBox,
-                { backgroundColor: isDarkMode ? "rgba(59,130,246,0.2)" : "#E4F1FF" },
+                styles.overviewIconCircle,
+                { backgroundColor: isDarkMode ? "rgba(59,130,246,0.25)" : "#DBEAFE" },
               ]}
             >
-              <Ionicons name="arrow-forward" size={20} color="#1e7ba8" />
+              <Ionicons name="arrow-forward" size={18} color={colors.primary} />
+            </View>
+            <Text style={[styles.overviewLabel, { color: colors.textMuted }]}>Punch In</Text>
+            <Text style={[styles.overviewBigValue, { color: colors.text }]}>
+              {formatTime(punchInTime)}
+            </Text>
+            <View style={styles.overviewFooterRow}>
+              <Text style={[styles.overviewDate, { color: colors.textMuted }]}>
+                {formatDate(punchInTime)}
+              </Text>
+              <View
+                style={[
+                  styles.overviewChip,
+                  { backgroundColor: punchInTime ? "rgba(34,197,94,0.15)" : "rgba(59,130,246,0.15)" },
+                ]}
+              >
+                <Text style={[styles.overviewChipText, { color: punchInTime ? "#16A34A" : colors.primary }]}>
+                  {punchInTime ? "Completed" : "Not done"}
+                </Text>
+              </View>
             </View>
           </View>
-          <View style={styles.infoContainer}>
-            <Text style={[styles.title, { color: colors.text }]}>Punch In</Text>
-            <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-              {formatDate(punchInTime)}
-            </Text>
-          </View>
-          <View style={styles.timeContainer}>
-            <Text style={[styles.time, { color: colors.text }]}>{formatTime(punchInTime)}</Text>
-            <Text style={[styles.status, { color: colors.textMuted }]}>
-              {punchInTime ? "Completed" : "Not done"}
-            </Text>
-          </View>
-        </View>
-        <View
-          style={[
-            styles.attendanceCard,
-            { backgroundColor: colors.white, borderColor: colors.border },
-          ]}
-        >
-          <View style={styles.iconContainer}>
+
+          {/* Last Punch Card */}
+          <View
+            style={[
+              styles.overviewCard,
+              { backgroundColor: isDarkMode ? "rgba(248,113,113,0.12)" : "#FEF2F2" },
+            ]}
+          >
             <View
               style={[
-                styles.iconBox,
-                { backgroundColor: isDarkMode ? "rgba(248,113,113,0.2)" : "#FFE4E4" },
+                styles.overviewIconCircle,
+                { backgroundColor: isDarkMode ? "rgba(248,113,113,0.25)" : "#FEE2E2" },
               ]}
             >
-              <Ionicons name="arrow-back" size={20} color="#a81e1eff" />
+              <Ionicons name="arrow-back" size={18} color="#DC2626" />
+            </View>
+            <Text style={[styles.overviewLabel, { color: colors.textMuted }]}>Last Punch</Text>
+            <Text style={[styles.overviewBigValue, { color: colors.text }]}>
+              {formatTime(lastPunch)}
+            </Text>
+            <View style={styles.overviewFooterRow}>
+              <Text style={[styles.overviewDate, { color: colors.textMuted }]}>
+                {formatDate(lastPunch)}
+              </Text>
+              <View
+                style={[
+                  styles.overviewChip,
+                  { backgroundColor: lastPunch ? "rgba(34,197,94,0.15)" : "rgba(248,113,113,0.15)" },
+                ]}
+              >
+                <Text style={[styles.overviewChipText, { color: lastPunch ? "#16A34A" : "#DC2626" }]}>
+                  {lastPunch ? "Completed" : "Not done"}
+                </Text>
+              </View>
             </View>
           </View>
-          <View style={styles.infoContainer}>
-            <Text style={[styles.title, { color: colors.text }]}>Last Punch</Text>
-            <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-              {formatDate(lastPunch)}
+
+          {/* Working Hours Card */}
+          <View
+            style={[
+              styles.overviewCard,
+              { backgroundColor: isDarkMode ? "rgba(34,197,94,0.12)" : "#F0FDF4" },
+            ]}
+          >
+            <View style={styles.overviewCardHeaderRow}>
+              <View
+                style={[
+                  styles.overviewIconCircle,
+                  { backgroundColor: isDarkMode ? "rgba(34,197,94,0.25)" : "#DCFCE7" },
+                ]}
+              >
+                <Ionicons name="time-outline" size={18} color="#16A34A" />
+              </View>
+            </View>
+            <Text style={[styles.overviewLabel, { color: colors.textMuted }]}>Working Hours</Text>
+            <Text style={[styles.overviewBigValue, { color: colors.text }]}>
+              {workingHours.replace(" hours", "")}
+              <Text style={{ fontSize: moderateScale(11), color: colors.textMuted }}> hrs</Text>
             </Text>
-          </View>
-          <View style={styles.timeContainer}>
-            <Text style={[styles.time, { color: colors.text }]}>{formatTime(lastPunch)}</Text>
-            <Text style={[styles.status, { color: colors.textMuted }]}>
-              {lastPunch ? "Completed" : "Not done"}
-            </Text>
-          </View>
-        </View>
-        <View
-          style={[
-            styles.attendanceCard,
-            { backgroundColor: colors.white, borderColor: colors.border },
-          ]}
-        >
-          <View style={styles.iconContainer}>
-            <View
-              style={[
-                styles.iconBox,
-                { backgroundColor: isDarkMode ? "rgba(34,197,94,0.2)" : "#C2FFC7" },
-              ]}
-            >
-              <MaterialIcons name="laptop" size={20} color="#399918" />
+            <View style={styles.overviewFooterRow}>
+              <Text style={[styles.overviewDate, { color: colors.textMuted }]}>
+                {punchInTime ? formatDate(punchInTime) : formatDate(null)}
+              </Text>
+              <TouchableOpacity onPress={handleRefreshWorkingHours} disabled={refreshing}>
+                {refreshing ? (
+                  <ActivityIndicator size="small" color="#16A34A" />
+                ) : (
+                  <Ionicons name="refresh" size={15} color="#16A34A" />
+                )}
+              </TouchableOpacity>
             </View>
           </View>
-          <View style={styles.infoContainer}>
-            <Text style={[styles.title, { color: colors.text }]}>Working Hours</Text>
-            <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-              {punchInTime ? formatDate(punchInTime) : formatDate(null)}
-            </Text>
-          </View>
-          <View style={styles.timeContainer}>
-            <Text style={[styles.time, { color: colors.text }]}>{workingHours}</Text>
-            <TouchableOpacity onPress={handleRefreshWorkingHours} disabled={refreshing}>
-              {refreshing ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : (
-                <Ionicons name="refresh" size={16} color={colors.primary} />
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-        <View
-          style={[
-            styles.attendanceCard,
-            { backgroundColor: colors.white, borderColor: colors.border },
-          ]}
-        >
-          <View style={styles.iconContainer}>
+
+          {/* Break Card */}
+          <View
+            style={[
+              styles.overviewCard,
+              {
+                backgroundColor: isOnBreak
+                  ? isDarkMode
+                    ? "rgba(245,158,11,0.12)"
+                    : "#FFFBEB"
+                  : isDarkMode
+                  ? "rgba(34,197,94,0.12)"
+                  : "#F0FDF4",
+              },
+            ]}
+          >
             <View
               style={[
-                styles.iconBox,
+                styles.overviewIconCircle,
                 {
                   backgroundColor: isOnBreak
                     ? isDarkMode
-                      ? "rgba(245,158,11,0.2)"
+                      ? "rgba(245,158,11,0.25)"
                       : "#FEF3C7"
                     : isDarkMode
-                    ? "rgba(34,197,94,0.2)"
+                    ? "rgba(34,197,94,0.25)"
                     : "#DCFCE7",
                 },
               ]}
             >
-              <MaterialIcons
-                name="free-breakfast"
-                size={20}
-                color={isOnBreak ? "#d97706" : "#16a34a"}
+              <Ionicons
+                name="cafe-outline"
+                size={18}
+                color={isOnBreak ? "#D97706" : "#16A34A"}
               />
             </View>
-          </View>
-          <View style={styles.infoContainer}>
-            <Text style={[styles.title, { color: colors.text }]}>Break</Text>
-            <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-              {isOnBreak ? "Currently on break" : "Available for work"}
+            <Text style={[styles.overviewLabel, { color: colors.textMuted }]}>Break</Text>
+            <Text style={[styles.overviewMutedValue, { color: colors.text, fontWeight: "600" }]}>
+              {isOnBreak ? "On break" : "Available for work"}
             </Text>
-          </View>
-          <View style={styles.timeContainer}>
             <TouchableOpacity
               style={[
-                styles.breakButton,
-                { backgroundColor: isOnBreak ? "#f59e0b" : "#22c55e" },
+                styles.overviewBreakButton,
+                { backgroundColor: isOnBreak ? "#F59E0B" : "#22C55E" },
               ]}
               disabled={(!isCheckedIn && !isOnBreak) || breakLoading}
               onPress={handleBreakToggle}
+              activeOpacity={0.8}
             >
               {breakLoading ? (
                 <ActivityIndicator size="small" color="#fff" />
@@ -1609,14 +1648,16 @@ const Index = () => {
               )}
             </TouchableOpacity>
             {!isCheckedIn && !isOnBreak && (
-              <Text style={[styles.status, { color: colors.textMuted }]}>Check in first</Text>
+              <Text style={[styles.overviewDate, { color: colors.textMuted, marginTop: verticalScale(4), textAlign: "center" }]}>
+                Check in first
+              </Text>
             )}
           </View>
         </View>
-        <View>
+        <View style={{ marginTop: verticalScale(16) }}>
           <HomeCalendar />
         </View>
-        <View>
+        <View style={{ marginTop: verticalScale(8) }}>
           <UpcomingHoliday />
         </View>
       </ScrollView>
@@ -1628,7 +1669,7 @@ const Index = () => {
         buttons={dialogButtons}
         onCancel={() => setDialogVisible(false)}
       />
-    </View>
+    </SmoothScreenWrapper>
   );
 };
 
@@ -1669,11 +1710,12 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flex: 1,
-    marginTop: verticalScale(-90),
+    marginTop: verticalScale(-86),
   },
   scrollContent: {
     paddingBottom: verticalScale(20),
   },
+  
   placeholderButton: { width: horizontalScale(80), height: verticalScale(50) },
   row: {
     flexDirection: "row",
@@ -1684,44 +1726,64 @@ const styles = StyleSheet.create({
   },
   sectionDetails: { fontSize: moderateScale(17), fontWeight: "800" },
   viewall: { fontSize: moderateScale(14), fontWeight: "600" },
-  attendanceCard: {
+  overviewGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    paddingHorizontal: horizontalScale(20),
+    marginTop: verticalScale(12),
+    gap: verticalScale(12),
+  },
+  overviewCard: {
+    width: "47%",
+    borderRadius: moderateScale(16),
+    padding: moderateScale(14),
+  },
+  overviewCardHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: moderateScale(12),
-    padding: moderateScale(12),
-    marginHorizontal: horizontalScale(20),
-    marginTop: verticalScale(12),
-    borderWidth: 1,
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    justifyContent: "space-between",
   },
-  iconContainer: { marginRight: horizontalScale(12) },
-  iconBox: {
-    width: horizontalScale(40),
-    height: horizontalScale(40),
-    borderRadius: horizontalScale(20),
+  overviewIconCircle: {
+    width: horizontalScale(36),
+    height: horizontalScale(36),
+    borderRadius: horizontalScale(18),
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: verticalScale(10),
   },
-  infoContainer: { flex: 1 },
-  title: { fontSize: moderateScale(16), fontWeight: "600", color: "#1e7ba8" },
-  subtitle: { fontSize: moderateScale(12), color: "#999" },
-  timeContainer: { alignItems: "flex-end" },
-  time: { fontSize: moderateScale(16), fontWeight: "600", color: "#1e7ba8" },
-  status: { fontSize: moderateScale(10), color: "#999", marginTop: verticalScale(2) },
-  breakButton: {
+  overviewLabel: { fontSize: moderateScale(13), fontWeight: "600" },
+  overviewBigValue: {
+    fontSize: moderateScale(18),
+    fontWeight: "700",
+    marginTop: verticalScale(4),
+    marginBottom: verticalScale(8),
+  },
+  overviewMutedValue: {
+    fontSize: moderateScale(12),
+    marginTop: verticalScale(4),
+    marginBottom: verticalScale(10),
+  },
+  overviewFooterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  overviewDate: { fontSize: moderateScale(11) },
+  overviewChip: {
+    borderRadius: moderateScale(10),
+    paddingHorizontal: horizontalScale(8),
+    paddingVertical: verticalScale(3),
+  },
+  overviewChipText: { fontSize: moderateScale(10), fontWeight: "700" },
+  overviewBreakButton: {
     borderRadius: moderateScale(8),
-    paddingVertical: verticalScale(6),
-    paddingHorizontal: horizontalScale(10),
-    minWidth: horizontalScale(90),
+    paddingVertical: verticalScale(8),
     alignItems: "center",
   },
   breakButtonText: {
     color: "#fff",
-    fontSize: moderateScale(11),
+    fontSize: moderateScale(12),
     fontWeight: "700",
   },
   captureButtonDisabled: {

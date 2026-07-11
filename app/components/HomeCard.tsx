@@ -55,8 +55,8 @@ const HomeCard = ({
   const [isLoadingTime, setIsLoadingTime] = useState(true);
 
   useEffect(() => {
-    let secondInterval: NodeJS.Timeout;
-    let resyncInterval: NodeJS.Timeout;
+    let secondInterval: any;
+    let resyncInterval: any;
 
     const fetchServerTime = async () => {
       try {
@@ -103,16 +103,15 @@ const HomeCard = ({
     return date.toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
-      month: "short", // Changed from "long" to "short" for abbreviated month names
+      month: "short",
       day: "numeric",
     });
   };
 
-  const formatTimeWithSeconds = (date: Date) => {
+  const formatTimeNoSeconds = (date: Date) => {
     return date.toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
-      second: "2-digit",
       hour12: true,
     });
   };
@@ -141,18 +140,17 @@ const HomeCard = ({
     }
   };
 
-  // Determine button text, handler, and color based on punchInTime
-  const buttonText = punchInTime !== null ? "Punch Out" : "Punch In";
-  const buttonHandler = punchInTime !== null ? handleCheckOut : handleCheckIn;
-  const buttonColor = punchInTime !== null ? "#bb1515ff" : "#00b406ff";
+  // Determine button text and handler based on isCheckedIn
+  const buttonText = isCheckedIn ? "Punch Out" : "Punch In";
+  const buttonHandler = isCheckedIn ? handleCheckOut : handleCheckIn;
 
   // Render loading state while fetching time
   if (isLoadingTime || !serverTime) {
     return (
       <View style={styles.cardWrapper}>
-        <View style={[styles.card, { backgroundColor: colors.white }]}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.statusText, { color: colors.text }]}>
+        <View style={[styles.card, { backgroundColor: colors.primary }]}>
+          <ActivityIndicator size="large" color={colors.onPrimary} />
+          <Text style={[styles.statusText, { color: colors.onPrimary }]}>
             Loading server time...
           </Text>
         </View>
@@ -161,122 +159,107 @@ const HomeCard = ({
   }
 
   const currentDate = formatDate(serverTime);
-  const formattedTime = formatTimeWithSeconds(serverTime);
+  const formattedTime = formatTimeNoSeconds(serverTime);
   const timePeriod = getTimePeriod(serverTime);
 
   return (
     <View style={styles.cardWrapper}>
-      <View style={[styles.card, { backgroundColor: colors.white }]}>
-        <View style={styles.cardContent}>
-          <View style={styles.leftSection}>
-            <View>
-              <Text style={[styles.dateText, { color: colors.text }]}>
-                {currentDate}
-              </Text>
-              <Text style={[styles.subText, { color: colors.grey }]}>
-                👋 {getGreeting(timePeriod)} {userName}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.rightSection}>
-            <Text style={[styles.timeText, { color: colors.text }]}>
-              {formattedTime}
-            </Text>
-            <Text style={[styles.subText, { color: colors.grey }]}>
-              {timePeriod}
+      <View style={[styles.card, { backgroundColor: colors.primary }]}>
+        <View style={styles.contentRow}>
+          <View style={styles.textContainer}>
+            <Text style={[styles.dateText, { color: "rgba(255,255,255,0.85)" }]}>{currentDate}</Text>
+            <Text style={[styles.timeText, { color: colors.onPrimary }]}>{formattedTime}</Text>
+            <Text style={[styles.subText, { color: "rgba(255,255,255,0.85)" }]}>
+              👋 {getGreeting(timePeriod)} {userName.split(" ")[0]}
             </Text>
           </View>
+
+          <TouchableOpacity
+            style={[styles.button, isCheckInDisabled && styles.buttonDisabled]}
+            onPress={buttonHandler}
+            disabled={isCheckInDisabled}
+            activeOpacity={0.9}
+          >
+            <Ionicons
+              name="finger-print"
+              size={22}
+              color={colors.primary}
+              style={styles.buttonIcon}
+            />
+            <Text style={[styles.buttonText, { color: colors.primary }]}>{buttonText}</Text>
+          </TouchableOpacity>
         </View>
+
         {(showWifiStatus || showLocationStatus) && (
           <View style={styles.statusContainer}>
             {showWifiStatus && (isLoadingWifi ? (
               <View style={styles.statusItem}>
-                <ActivityIndicator size={16} color={colors.primary} />
-                <Text style={[styles.statusText, { color: colors.text }]}>
-                  Loading WiFi details...
+                <ActivityIndicator size={12} color={colors.onPrimary} />
+                <Text style={[styles.statusText, { color: colors.onPrimary }]}>
+                  Checking WiFi...
                 </Text>
               </View>
             ) : (
               <View style={styles.statusItem}>
                 <Ionicons
                   name="wifi"
-                  size={16}
-                  color={isWifiValid ? "#00C851" : "#ff4444"}
+                  size={14}
+                  color={isWifiValid ? "#4ADE80" : "#FCA5A5"}
                 />
                 <Text
                   style={[
                     styles.statusText,
-                    { color: isWifiValid ? "#00C851" : "#ff4444" },
+                    { color: isWifiValid ? "#4ADE80" : "#FCA5A5" },
                   ]}
                   numberOfLines={1}
                 >
-                  {isWifiValid ? `WiFi: Connected` : "WiFi: Not Connected"}
+                  {isWifiValid ? `WiFi: Connected` : "WiFi: Offline"}
                 </Text>
                 {!isWifiValid && (
                   <TouchableOpacity
                     style={styles.retryButton}
                     onPress={handleRetryWifi}
                   >
-                    <Ionicons name="refresh" size={16} color={colors.primary} />
+                    <Ionicons name="refresh" size={12} color={colors.onPrimary} />
                   </TouchableOpacity>
                 )}
               </View>
             ))}
             {showLocationStatus && (isLoadingLocation ? (
               <View style={styles.statusItem}>
-                <ActivityIndicator size={16} color={colors.primary} />
-                <Text style={[styles.statusText, { color: colors.text }]}>
-                  Loading Location details...
+                <ActivityIndicator size={12} color={colors.onPrimary} />
+                <Text style={[styles.statusText, { color: colors.onPrimary }]}>
+                  Locating...
                 </Text>
               </View>
             ) : (
               <View style={styles.statusItem}>
                 <Ionicons
                   name="location"
-                  size={16}
-                  color={isLocationValid ? "#00C851" : "#ff4444"}
+                  size={14}
+                  color={isLocationValid ? "#4ADE80" : "#FCA5A5"}
                 />
                 <Text
                   style={[
                     styles.statusText,
-                    { color: isLocationValid ? "#00C851" : "#ff4444" },
+                    { color: isLocationValid ? "#4ADE80" : "#FCA5A5" },
                   ]}
                   numberOfLines={1}
                 >
-                  {isLocationValid
-                    ? "Location: Available"
-                    : "Location: Unavailable"}
+                  {isLocationValid ? "Location: OK" : "Location: Err"}
                 </Text>
                 {!isLocationValid && (
                   <TouchableOpacity
                     style={styles.retryButton}
                     onPress={handleRetryLocation}
                   >
-                    <Ionicons name="refresh" size={16} color={colors.primary} />
+                    <Ionicons name="refresh" size={12} color={colors.onPrimary} />
                   </TouchableOpacity>
                 )}
               </View>
             ))}
           </View>
         )}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={[
-              styles.button,
-              { backgroundColor: isCheckInDisabled ? "#A9A9A9" : buttonColor },
-            ]}
-            onPress={buttonHandler}
-            disabled={isCheckInDisabled}
-          >
-            <Ionicons
-              name={punchInTime !== null ? "exit-outline" : "camera"}
-              size={20}
-              color="#fff"
-              style={styles.buttonIcon}
-            />
-            <Text style={styles.buttonText}>{buttonText}</Text>
-          </TouchableOpacity>
-        </View>
       </View>
     </View>
   );
@@ -286,56 +269,51 @@ export default HomeCard;
 
 const styles = StyleSheet.create({
   cardWrapper: {
-    marginTop: 0,
-    paddingHorizontal: 20,
+    marginTop: 8,
+    paddingHorizontal: 16,
     zIndex: 10,
   },
   card: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
+    borderRadius: 24,
     padding: 20,
-    elevation: 2,
+    elevation: 4,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    minHeight: 150,
-    alignItems: "center",
-    justifyContent: "center",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    overflow: "hidden",
   },
-  cardContent: {
+  contentRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
   },
-  leftSection: {
+  textContainer: {
     flex: 1,
     paddingRight: 10,
   },
-  rightSection: {
-    alignItems: "flex-end",
-  },
   dateText: {
-    fontSize: 15,
+    fontSize: 11,
     fontWeight: "600",
-    color: "#1e7ba8",
-    marginBottom: 2,
-  },
-  subText: {
-    fontSize: 13,
-    color: "#555",
-    marginTop: 4,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   timeText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#1e7ba8",
+    fontSize: 28,
+    fontWeight: "900",
+    marginTop: 2,
+    letterSpacing: -0.5,
+  },
+  subText: {
+    fontSize: 12,
+    fontWeight: "500",
+    marginTop: 4,
   },
   statusContainer: {
-    marginTop: 5,
-    marginBottom: 5,
+    marginTop: 14,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
+    borderTopColor: "rgba(255,255,255,0.18)",
     width: "100%",
     flexDirection: "row",
     justifyContent: "space-between",
@@ -343,44 +321,40 @@ const styles = StyleSheet.create({
   statusItem: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 6,
-    flex: 1,
-    minWidth: 150,
+    marginRight: 10,
   },
   statusText: {
-    fontSize: 12,
-    marginLeft: 8,
-    fontWeight: "500",
-    flexShrink: 1,
-  },
-  buttonContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 10,
+    fontSize: 10,
+    marginLeft: 4,
+    fontWeight: "600",
   },
   button: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    elevation: 2,
+    backgroundColor: "#fff",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   buttonIcon: {
-    marginRight: 8,
+    marginRight: 6,
   },
   buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: 0.2,
   },
   retryButton: {
-    padding: 4,
-    marginLeft: 8,
+    padding: 2,
+    marginLeft: 4,
   },
 });

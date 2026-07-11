@@ -20,9 +20,7 @@ import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import useAuthStore from "../../../store/useUserStore";
 import { getChatConversations, getEmployees } from "../../../api/api";
 import { io, Socket } from "socket.io-client";
-
-const SOCKET_URL =
-  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinyahrms.duckdns.org";
+import { socketURL as SOCKET_URL } from "utils/apiConfig";
 
 const normalizeSystemText = (text?: string) => (text || "").trim().toLowerCase();
 

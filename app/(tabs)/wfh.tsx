@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import AdminTabHeader from "app/components/AdminTabHeader";
+import Header from "app/components/Header";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -15,6 +15,7 @@ import {
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import { getWfhBalance, getWfhRequests } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
+import SmoothScreenWrapper from "../components/SmoothScreenWrapper";
 import { darkTheme, lightTheme } from "../constants/colors";
 import type { AppTheme } from "../constants/colors";
 
@@ -141,9 +142,9 @@ const Wfh = () => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <SmoothScreenWrapper style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.contentWrapper}>
-        <AdminTabHeader title="WFH" />
+        <Header title="WFH" showBack={false} />
 
         <View style={styles.cardWrapper}>
           <View
@@ -152,43 +153,18 @@ const Wfh = () => {
               { backgroundColor: colors.white, borderColor: colors.border },
             ]}
           >
-            <View
-              style={[
-                styles.triangle,
-                { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
-              ]}
-            />
-            <View
-              style={[
-                styles.triangle2,
-                { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
-              ]}
-            />
-            <View
-              style={[
-                styles.triangle3,
-                { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
-              ]}
-            />
-            <View
-              style={[
-                styles.triangle4,
-                { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
-              ]}
-            />
+            <View style={[styles.blobTop, { backgroundColor: colors.primary + "10" }]} />
+            <View style={[styles.blobBottom, { backgroundColor: colors.primary + "08" }]} />
+            <View style={[styles.blobAccent, { backgroundColor: colors.primary + "18" }]} />
             <View style={styles.contentContainer}>
               <View style={styles.leaveRow}>
                 <View
                   style={[
                     styles.iconWrapper,
-                    {
-                      backgroundColor: isDarkMode
-                        ? "rgba(33,150,243,0.22)"
-                        : "#E3F2FD",
-                    },
+                    { backgroundColor: colors.primary + "22" },
                   ]}
                 >
-                  <Feather name="home" size={20} color="#2196F3" />
+                  <Feather name="home" size={20} color={colors.primary} />
                 </View>
                 <View style={styles.textContainer}>
                   <Text style={[styles.typeText, { color: colors.text }]}>WFH</Text>
@@ -342,7 +318,7 @@ const Wfh = () => {
           </TouchableOpacity>
         </Animated.View>
       </View>
-    </View>
+    </SmoothScreenWrapper>
   );
 };
 
@@ -494,64 +470,29 @@ const styles = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
   },
-  triangle: {
+  blobTop: {
     position: "absolute",
-    top: 10,
-    left: 10,
-    width: 0,
-    height: 0,
-    borderStyle: "solid",
-    borderTopWidth: moderateScale(40),
-    borderRightWidth: moderateScale(40),
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-    borderTopColor: "#E1F4FF",
-    borderRightColor: "transparent",
+    top: -20,
+    right: -20,
+    width: moderateScale(100),
+    height: moderateScale(100),
+    borderRadius: moderateScale(50),
   },
-  triangle2: {
+  blobBottom: {
     position: "absolute",
-    bottom: 10,
-    right: 10,
-    width: 0,
-    height: 0,
-    borderStyle: "solid",
-    borderTopWidth: moderateScale(40),
-    borderRightWidth: moderateScale(40),
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-    borderTopColor: "#E1F4FF",
-    borderRightColor: "transparent",
-    transform: [{ rotate: "180deg" }],
+    bottom: -30,
+    left: -30,
+    width: moderateScale(130),
+    height: moderateScale(130),
+    borderRadius: moderateScale(65),
   },
-  triangle3: {
+  blobAccent: {
     position: "absolute",
-    bottom: 10,
-    left: 10,
-    width: 0,
-    height: 0,
-    borderStyle: "solid",
-    borderTopWidth: moderateScale(40),
-    borderRightWidth: moderateScale(40),
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-    borderTopColor: "#E1F4FF",
-    borderRightColor: "transparent",
-    transform: [{ rotate: "270deg" }],
-  },
-  triangle4: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    width: 0,
-    height: 0,
-    borderStyle: "solid",
-    borderTopWidth: moderateScale(40),
-    borderRightWidth: moderateScale(40),
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-    borderTopColor: "#E1F4FF",
-    borderRightColor: "transparent",
-    transform: [{ rotate: "90deg" }],
+    top: moderateScale(20),
+    left: moderateScale(40),
+    width: moderateScale(8),
+    height: moderateScale(8),
+    borderRadius: moderateScale(4),
   },
   contentContainer: {
     zIndex: 2,

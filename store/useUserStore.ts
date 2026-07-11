@@ -1,7 +1,30 @@
 // ../../store/useUserStore.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
-import { getEmployeeProfile, logout } from '../api/api'; // Adjust path as needed
+import { getEmployeeProfile, getOrganizationPlan, logout } from '../api/api'; // Adjust path as needed
+
+type OrganizationPlanType = "BASIC" | "PRO" | "ENTERPRISE" | null;
+
+function normalizeOrganizationPlanType(
+  planType?: string | number | null
+): OrganizationPlanType {
+  const normalizedType =
+    planType == null ? "" : String(planType).trim().toUpperCase();
+
+  if (
+    normalizedType === "BASIC" ||
+    normalizedType === "PRO" ||
+    normalizedType === "ENTERPRISE"
+  ) {
+    return normalizedType as OrganizationPlanType;
+  }
+
+  if (normalizedType === "1") return "BASIC";
+  if (normalizedType === "2") return "PRO";
+  if (normalizedType === "3") return "ENTERPRISE";
+
+  return null;
+}
 
 interface User {
   userId: string;
@@ -17,6 +40,8 @@ interface User {
   mustChangePassword: boolean;
   profileImage: string; // Signed passport/photo URL
   designation: string; // Added for designation.name
+  planType?: OrganizationPlanType;
+  planName?: string | null;
 }
 
 interface AuthState {
@@ -42,6 +67,21 @@ const useAuthStore = create<AuthState>((set) => ({
 
   setAuth: async ({ access_token, user }) => {
     try {
+      const organizationId = user.organization?.id || "";
+      const hintedPlanName =
+        user.planName ??
+        user.organization?.planName ??
+        null;
+      const hintedPlanType = normalizeOrganizationPlanType(
+        user.planType ??
+          user.pricingTypeId ??
+          user.pricingType?.typeId ??
+          user.organization?.planType ??
+          user.organization?.pricingTypeId ??
+          user.organization?.pricingType?.typeId ??
+          null
+      );
+
       const formattedUser: User = {
         userId: user.id,
         userName: user.userName,
@@ -52,10 +92,12 @@ const useAuthStore = create<AuthState>((set) => ({
         gender: user.gender,
         email: user.email,
         mobileNumber: user.mobileNumber,
-        organizationId: user.organization?.id || "",
+        organizationId,
         mustChangePassword: user.mustChangePassword,
         profileImage: "", // Initialize as empty, to be updated by fetchEmployeeProfile
         designation: "", // Initialize as empty, to be updated by fetchEmployeeProfile
+        planType: hintedPlanType,
+        planName: hintedPlanName,
       };
 
       await AsyncStorage.setItem("token", access_token);
@@ -67,21 +109,51 @@ const useAuthStore = create<AuthState>((set) => ({
         isAuthenticated: true,
       });
 
-      // Fetch employee profile to get profileImage and designation
-      if (user.id) {
-        const response = await getEmployeeProfile(user.id);
-        const employeeData = response.data; // Assuming API returns data in `data` field
-        const updatedUser: User = {
-          ...formattedUser,
-          profileImage:
-            employeeData.passportPhotoUrl ||
-            employeeData.photoUrl ||
-            "",
-          designation: employeeData.designation?.name || "",
-        };
-        await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
-        set({ user: updatedUser });
+      const profilePromise = user.id
+        ? getEmployeeProfile(user.id).catch(() => null)
+        : Promise.resolve(null);
+      const orgPlanPromise = organizationId
+        ? getOrganizationPlan(organizationId).catch(() => null)
+        : Promise.resolve(null);
+
+      const [profileResponse, orgPlanResponse] = await Promise.all([
+        profilePromise,
+        orgPlanPromise,
+      ]);
+
+      let resolvedPlanType = hintedPlanType;
+      let resolvedPlanName = hintedPlanName;
+      const orgPlan = (orgPlanResponse as any)?.data ?? null;
+
+      if (orgPlan) {
+        resolvedPlanName =
+          orgPlan.name ??
+          orgPlan.planName ??
+          orgPlan.plan?.name ??
+          orgPlan.plan?.planName ??
+          resolvedPlanName;
+        resolvedPlanType = normalizeOrganizationPlanType(
+          orgPlan.planType ??
+            orgPlan.pricingTypeId ??
+            orgPlan.plan?.planType ??
+            orgPlan.plan?.pricingTypeId ??
+            null
+        );
       }
+
+      const employeeData = (profileResponse as any)?.data ?? null;
+      const updatedUser: User = {
+        ...formattedUser,
+        profileImage:
+          employeeData?.passportPhotoUrl ||
+          employeeData?.photoUrl ||
+          "",
+        designation: employeeData?.designation?.name || "",
+        planType: resolvedPlanType,
+        planName: resolvedPlanName,
+      };
+      await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
+      set({ user: updatedUser });
     } catch (error) {
       console.error("Error setting auth data:", error);
     }
@@ -105,17 +177,53 @@ const useAuthStore = create<AuthState>((set) => ({
         const user = JSON.parse(userString);
         set({ accessToken: token, user, isAuthenticated: true });
 
-        // Fetch employee profile if profileImage or designation is missing
-        if (user.userId && (!user.profileImage || !user.designation)) {
-          const response = await getEmployeeProfile(user.userId);
-          const employeeData = response.data;
+        const shouldFetchProfile =
+          Boolean(user.userId) && (!user.profileImage || !user.designation);
+        const shouldFetchPlan =
+          Boolean(user.organizationId) && !user.planType;
+
+        if (shouldFetchProfile || shouldFetchPlan) {
+          const profilePromise = shouldFetchProfile
+            ? getEmployeeProfile(user.userId).catch(() => null)
+            : Promise.resolve(null);
+          const planPromise = shouldFetchPlan
+            ? getOrganizationPlan(user.organizationId).catch(() => null)
+            : Promise.resolve(null);
+
+          const [profileResponse, planResponse] = await Promise.all([
+            profilePromise,
+            planPromise,
+          ]);
+
+          const employeeData = (profileResponse as any)?.data ?? null;
+          const planData = (planResponse as any)?.data ?? null;
+          const planName =
+            planData?.name ??
+            planData?.planName ??
+            planData?.plan?.name ??
+            planData?.plan?.planName ??
+            user.planName ??
+            null;
+          const planType = planData
+            ? normalizeOrganizationPlanType(
+                planData?.planType ??
+                  planData?.pricingTypeId ??
+                  planData?.plan?.planType ??
+                  planData?.plan?.pricingTypeId ??
+                  null
+              )
+            : user.planType ?? null;
+
           const updatedUser: User = {
             ...user,
             profileImage:
-              employeeData.passportPhotoUrl ||
-              employeeData.photoUrl ||
+              employeeData?.passportPhotoUrl ||
+              employeeData?.photoUrl ||
+              user.profileImage ||
               "",
-            designation: employeeData.designation?.name || "",
+            designation: employeeData?.designation?.name || user.designation || "",
+            planType,
+            planName,
           };
           await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
           set({ user: updatedUser });

@@ -22,7 +22,7 @@ export type AppTheme = {
 };
 
 export const lightTheme: AppTheme = {
-  primary: "#026D94",
+  primary: "#1D4ED8",
   secondary: "#7AB2FF",
   background: "#F3F8FB",
   surface: "#FFFFFF",
@@ -41,11 +41,11 @@ export const lightTheme: AppTheme = {
   onPrimary: "#FFFFFF",
   overlay: "rgba(0,0,0,0.45)",
   shadow: "#000000",
-  statusBar: "#026D94",
+  statusBar: "#1D4ED8",
 };
 
 export const darkTheme: AppTheme = {
-  primary: "#0A84B7",
+  primary: "#3B82F6",
   secondary: "#5CA3FF",
   background: "#0B1220",
   surface: "#121B2B",
@@ -66,5 +66,7 @@ export const darkTheme: AppTheme = {
   shadow: "#000000",
   statusBar: "#0B1220",
 };
+
+export const brandPrimary = { light: "#1D4ED8", dark: "#3B82F6" };
 
 export default { lightTheme, darkTheme };

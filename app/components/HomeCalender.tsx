@@ -235,7 +235,7 @@ const HomeCalendar = () => {
 
       // Priority: Weekend > Holiday > Status (absent suppressed on off days)
       if (record.isWeekend || record.isSunday) {
-        backgroundColor = "#026D94"; // Blue for weekend/off days
+        backgroundColor = colors.primary; // Blue for weekend/off days
       } else if (record.isHoliday) {
         backgroundColor = "#ffb4b4ff"; // Blue for holidays
       } else {
@@ -285,7 +285,7 @@ const HomeCalendar = () => {
     
     // Priority: Weekend > Holiday > Status
     if (dayData.isWeekend || dayData.isSunday) {
-      return "#026D94"; // Blue for weekend/off days
+      return colors.primary; // Blue for weekend/off days
     } else if (dayData.isHoliday) {
       return "#045faaff"; // Black border for holidays
     } else {
@@ -309,7 +309,7 @@ const HomeCalendar = () => {
     if (!dayData) return null;
     
     if (dayData.isWeekend || dayData.isSunday) {
-      return "#026D94"; 
+      return colors.primary;
     } else if (dayData.isHoliday) {
       return "transparent"; 
     } else {
@@ -442,7 +442,7 @@ const HomeCalendar = () => {
                     },
                     // Sunday design - solid blue background
                     dayData?.isSunday && {
-                      backgroundColor: "#026D94",
+                      backgroundColor: colors.primary,
                       borderRadius: isToday ? todayCircleSize / 2 : circleSize / 2,
                     },
                     // Holiday design - light background with border
@@ -569,7 +569,7 @@ const HomeCalendar = () => {
 
               <View style={styles.legendItem}>
                 <View
-                  style={[styles.legendDot, { backgroundColor: "#026D94" }]}
+                  style={[styles.legendDot, { backgroundColor: colors.primary }]}
                 />
                 <Text style={[styles.legendText, { color: colors.text }]}>
                   Sunday

@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import AdminTabHeader from "app/components/AdminTabHeader";
+import Header from "app/components/Header";
 import { darkTheme, lightTheme } from "app/constants/colors";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
@@ -22,6 +22,7 @@ import {
 import useAuthStore from "../../store/useUserStore";
 import TimeSlipsSkeleton from "../Loaders/TimeSlipsSkeleton";
 import { CACHE_TTL, withCache, invalidateCacheByPrefix, getCached } from "utils/apiCache";
+import SmoothScreenWrapper from "../components/SmoothScreenWrapper";
 
 // TypeScript Interfaces
 interface TimestampEntry {
@@ -434,8 +435,8 @@ export default function TimeSlips() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <AdminTabHeader title="Time Slips" />
+    <SmoothScreenWrapper style={[styles.container, { backgroundColor: colors.background }]}>
+      <Header title="Time Slips" showBack={false} />
       <View style={styles.cardWrapper}>
         <View
           style={[
@@ -443,30 +444,9 @@ export default function TimeSlips() {
             { backgroundColor: colors.white, borderColor: colors.border },
           ]}
         >
-          <View
-            style={[
-              styles.triangle,
-              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
-            ]}
-          />
-          <View
-            style={[
-              styles.triangle2,
-              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
-            ]}
-          />
-          <View
-            style={[
-              styles.triangle3,
-              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
-            ]}
-          />
-          <View
-            style={[
-              styles.triangle4,
-              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
-            ]}
-          />
+          <View style={[styles.blobTop, { backgroundColor: colors.primary + "10" }]} />
+          <View style={[styles.blobBottom, { backgroundColor: colors.primary + "08" }]} />
+          <View style={[styles.blobAccent, { backgroundColor: colors.primary + "18" }]} />
           <View style={styles.contentContainer}>
             <View style={styles.statsContainer}>
               <View style={styles.statItem}>
@@ -788,7 +768,7 @@ export default function TimeSlips() {
           <View style={styles.mainFabNotificationDot} />
         )}
       </TouchableOpacity>
-    </View>
+    </SmoothScreenWrapper>
   );
 }
 
@@ -820,64 +800,29 @@ const styles = StyleSheet.create({
     zIndex: 2,
     position: "relative",
   },
-  triangle: {
+  blobTop: {
     position: "absolute",
-    top: 10,
-    left: 10,
-    width: 0,
-    height: 0,
-    borderStyle: "solid",
-    borderTopWidth: moderateScale(60),
-    borderRightWidth: moderateScale(60),
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-    borderTopColor: "#E1F4FF",
-    borderRightColor: "transparent",
+    top: -20,
+    right: -20,
+    width: moderateScale(100),
+    height: moderateScale(100),
+    borderRadius: moderateScale(50),
   },
-  triangle2: {
+  blobBottom: {
     position: "absolute",
-    bottom: 10,
-    right: 10,
-    width: 0,
-    height: 0,
-    borderStyle: "solid",
-    borderTopWidth: moderateScale(60),
-    borderRightWidth: moderateScale(60),
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-    borderTopColor: "#E1F4FF",
-    borderRightColor: "transparent",
-    transform: [{ rotate: "180deg" }],
+    bottom: -30,
+    left: -30,
+    width: moderateScale(130),
+    height: moderateScale(130),
+    borderRadius: moderateScale(65),
   },
-  triangle3: {
+  blobAccent: {
     position: "absolute",
-    bottom: 10,
-    left: 10,
-    width: 0,
-    height: 0,
-    borderStyle: "solid",
-    borderTopWidth: moderateScale(60),
-    borderRightWidth: moderateScale(60),
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-    borderTopColor: "#E1F4FF",
-    borderRightColor: "transparent",
-    transform: [{ rotate: "270deg" }],
-  },
-  triangle4: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    width: 0,
-    height: 0,
-    borderStyle: "solid",
-    borderTopWidth: moderateScale(60),
-    borderRightWidth: moderateScale(60),
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-    borderTopColor: "#E1F4FF",
-    borderRightColor: "transparent",
-    transform: [{ rotate: "90deg" }],
+    top: moderateScale(20),
+    left: moderateScale(40),
+    width: moderateScale(8),
+    height: moderateScale(8),
+    borderRadius: moderateScale(4),
   },
   statsContainer: {
     flexDirection: "row",

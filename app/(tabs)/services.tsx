@@ -13,10 +13,11 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
 import { darkTheme, lightTheme } from "../constants/colors";
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import { getPolicies } from "../../api/api";
+import Header from "../components/Header";
+import SmoothScreenWrapper from "../components/SmoothScreenWrapper";
 
 if (Platform.OS === "android") {
   UIManager.setLayoutAnimationEnabledExperimental?.(true);
@@ -34,7 +35,6 @@ const Services = () => {
   const colorScheme = useColorScheme() ?? "light";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
   const isDarkMode = colorScheme === "dark";
-  const navigation = useNavigation();
 
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,38 +87,8 @@ const Services = () => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.hero, { backgroundColor: colors.primary }]}>
-        <View style={styles.heroHeaderRow}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={[
-              styles.heroBackButton,
-              {
-                backgroundColor: isDarkMode
-                  ? "rgba(9,15,27,0.82)"
-                  : "rgba(255,255,255,0.92)",
-                borderColor: isDarkMode ? colors.border : "rgba(255,255,255,0.4)",
-              },
-            ]}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="arrow-back"
-              size={20}
-              color={isDarkMode ? colors.text : "#0b4f73"}
-            />
-          </TouchableOpacity>
-          <View style={styles.heroTitleBlock}>
-            <Text style={[styles.heroTitle, { color: colors.onPrimary }]}>
-              Policies
-            </Text>
-            <Text style={[styles.heroSubtitle, { color: "rgba(255,255,255,0.82)" }]}>
-              Company policy, guidelines and updates
-            </Text>
-          </View>
-        </View>
-      </View>
+    <SmoothScreenWrapper style={[styles.container, { backgroundColor: colors.background }]}>
+      <Header title="Policies" />
 
       <ScrollView
         style={styles.scroll}
@@ -264,7 +234,7 @@ const Services = () => {
           </Text>
         </View>
       </ScrollView>
-    </View>
+    </SmoothScreenWrapper>
   );
 };
 
@@ -273,38 +243,6 @@ export default Services;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  hero: {
-    paddingTop: verticalScale(48),
-    paddingBottom: verticalScale(86),
-    paddingHorizontal: horizontalScale(16),
-  },
-  heroHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: horizontalScale(12),
-  },
-  heroBackButton: {
-    width: horizontalScale(40),
-    height: horizontalScale(40),
-    borderRadius: horizontalScale(20),
-    backgroundColor: "rgba(255,255,255,0.92)",
-    borderWidth: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  heroTitleBlock: {
-    flex: 1,
-  },
-  heroTitle: {
-    color: "#fff",
-    fontSize: moderateScale(22),
-    fontWeight: "700",
-  },
-  heroSubtitle: {
-    color: "rgba(255,255,255,0.82)",
-    fontSize: moderateScale(12),
-    marginTop: verticalScale(2),
   },
   scroll: {
     flex: 1,
@@ -315,7 +253,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   introCard: {
-    marginTop: verticalScale(-42),
+    marginTop: verticalScale(-90),
     marginBottom: 18,
     padding: moderateScale(16),
     borderRadius: moderateScale(16),

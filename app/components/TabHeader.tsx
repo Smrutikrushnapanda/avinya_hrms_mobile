@@ -11,15 +11,11 @@ import {
 } from "react-native";
 import useAuthStore from "../../store/useUserStore";
 import useMessageStore from "../../store/useMessageStore";
-import { darkTheme, lightTheme } from "../constants/colors";
+import { brandPrimary, darkTheme, lightTheme } from "../constants/colors";
 import { getInboxMessages, getOrganization } from "../../api/api";
 import { io, Socket } from "socket.io-client";
 import HeaderBackground from "./HeaderBackground";
-
-const SOCKET_URL =
-  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinyahrms.duckdns.org";
-
-const DEFAULT_HOME_HEADER_COLOR = "#026D94";
+import { socketURL as SOCKET_URL } from "utils/apiConfig";
 
 const getHexRgb = (color?: string): { r: number; g: number; b: number } | null => {
   if (!color) return null;
@@ -64,17 +60,23 @@ const isMediaActive = (startDate?: string, endDate?: string) => {
   return true;
 };
 
-const TabHeader = () => {
+const TabHeader = ({
+  onBrandingChange,
+}: {
+  onBrandingChange?: (hasCustomBranding: boolean) => void;
+}) => {
   const colorScheme = useColorScheme() ?? "light";
   const isDarkMode = colorScheme === "dark";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
+  const defaultHeaderColor = isDarkMode ? brandPrimary.dark : brandPrimary.light;
 
   const router = useRouter();
   const { user, fetchEmployeeProfile, loading, error } = useAuthStore();
   const { accessToken } = useAuthStore();
   const { unreadCount, setUnreadCount, incrementUnread } = useMessageStore();
-  const [headerColor, setHeaderColor] = useState(DEFAULT_HOME_HEADER_COLOR);
+  const [headerColor, setHeaderColor] = useState(defaultHeaderColor);
   const [headerMediaUrl, setHeaderMediaUrl] = useState<string | null>(null);
+  const [hasCustomBranding, setHasCustomBranding] = useState(false);
   const isLightHeaderBackground =
     !headerMediaUrl && isLightHeaderColor(headerColor || colors.primary);
   const headerPrimaryTextColor = isLightHeaderBackground
@@ -118,24 +120,26 @@ const TabHeader = () => {
     try {
       const res = await getOrganization(user.organizationId);
       const org = res.data || {};
-      setHeaderColor(org.homeHeaderBackgroundColor || DEFAULT_HOME_HEADER_COLOR);
-      if (
+      const mediaActive =
         org.homeHeaderMediaUrl &&
-        isMediaActive(org.homeHeaderMediaStartDate, org.homeHeaderMediaEndDate)
-      ) {
-        setHeaderMediaUrl(org.homeHeaderMediaUrl);
-      } else {
-        setHeaderMediaUrl(null);
-      }
+        isMediaActive(org.homeHeaderMediaStartDate, org.homeHeaderMediaEndDate);
+      setHeaderColor(org.homeHeaderBackgroundColor || defaultHeaderColor);
+      setHeaderMediaUrl(mediaActive ? org.homeHeaderMediaUrl : null);
+      setHasCustomBranding(Boolean(org.homeHeaderBackgroundColor) || Boolean(mediaActive));
     } catch {
-      setHeaderColor(DEFAULT_HOME_HEADER_COLOR);
+      setHeaderColor(defaultHeaderColor);
       setHeaderMediaUrl(null);
+      setHasCustomBranding(false);
     }
-  }, [user?.organizationId]);
+  }, [user?.organizationId, defaultHeaderColor]);
 
   useEffect(() => {
     loadHeaderConfig();
   }, [loadHeaderConfig]);
+
+  useEffect(() => {
+    onBrandingChange?.(hasCustomBranding);
+  }, [hasCustomBranding, onBrandingChange]);
 
   useFocusEffect(
     useCallback(() => {
@@ -186,6 +190,14 @@ const TabHeader = () => {
   const displayName = fullName || (loading && !user ? "Loading..." : "User");
   const displayTitle = user?.designation || "Employee";
 
+  const getGreeting = () => {
+    const hours = new Date().getHours();
+    if (hours >= 5 && hours < 12) return "Good Morning";
+    if (hours >= 12 && hours < 17) return "Good Afternoon";
+    if (hours >= 17 && hours < 20) return "Good Evening";
+    return "Good Night";
+  };
+
   const handleProfilePress = () => {
     router.push("/(screen)/ProfilePage"); // Navigate to profile page
   };
@@ -193,6 +205,60 @@ const TabHeader = () => {
   const handleNotificationPress = () => {
     router.push("/(screen)/message");
   };
+
+  if (!hasCustomBranding) {
+    return (
+      <View style={[styles.flatContainer, { backgroundColor: colors.background }]}>
+        <TouchableOpacity
+          style={styles.profileSection}
+          onPress={handleProfilePress}
+          activeOpacity={0.8}
+        >
+          <Image
+            source={{
+              uri:
+                user?.profileImage ||
+                "https://cdn-icons-png.flaticon.com/512/9187/9187532.png",
+            }}
+            style={[styles.flatProfileImage, { borderColor: colors.border }]}
+          />
+          <View style={styles.textSection}>
+            {error ? (
+              <Text style={[styles.flatName, { color: colors.text }]}>Error</Text>
+            ) : (
+              <>
+                <Text style={[styles.flatGreeting, { color: colors.textMuted }]}>
+                  {getGreeting()},
+                </Text>
+                <Text style={[styles.flatName, { color: colors.text }]}>{displayName}</Text>
+                <Text style={[styles.flatTitle, { color: colors.textMuted }]}>
+                  {displayTitle}
+                </Text>
+              </>
+            )}
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.notificationButton} onPress={handleNotificationPress}>
+          <View
+            style={[
+              styles.notificationIcon,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <Ionicons name="notifications" size={20} color={colors.text} />
+            {unreadCount > 0 && (
+              <View style={[styles.notificationBadge, { backgroundColor: colors.red }]}>
+                <Text style={styles.badgeText}>
+                  {unreadCount > 99 ? "99+" : String(unreadCount)}
+                </Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.headerContainer, { backgroundColor: headerColor || colors.primary }]}>
@@ -276,6 +342,35 @@ const TabHeader = () => {
 };
 
 const styles = StyleSheet.create({
+  flatContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 20,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+  },
+  flatProfileImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    marginRight: 12,
+  },
+  flatGreeting: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  flatName: {
+    fontSize: 17,
+    fontWeight: "700",
+    marginTop: 1,
+  },
+  flatTitle: {
+    fontSize: 13,
+    fontWeight: "500",
+    marginTop: 1,
+  },
   headerContainer: {
     paddingBottom: 110,
     overflow: "hidden",

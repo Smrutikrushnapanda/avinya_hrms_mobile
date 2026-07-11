@@ -1,5 +1,5 @@
 import { AntDesign, FontAwesome, Ionicons } from "@expo/vector-icons";
-import AdminTabHeader from "app/components/AdminTabHeader";
+import Header from "app/components/Header";
 import CustomDialog from "app/components/CustomDialog";
 import React, { useCallback, useEffect, useState, useRef } from "react";
 import {
@@ -30,6 +30,7 @@ import {
 import { useResponsive } from "utils/useResponsive";
 import { darkTheme, lightTheme } from "../constants/colors";
 import AttendanceSkeleton from "../Loaders/AttendanceSkeleton";
+import SmoothScreenWrapper from "../components/SmoothScreenWrapper";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -302,11 +303,11 @@ const Attendance = () => {
       return;
     }
 
-    const cacheKey = `monthly_attendance_${user.userId}_${selectedMonth}_${selectedYear}`;
+    const cacheKey = `monthly_attendance_${user.organizationId}_${user.userId}_${selectedMonth}_${selectedYear}`;
 
     try {
       const isCached = !forceRefresh && getCached(cacheKey, CACHE_TTL.MONTHLY_ATTENDANCE) !== null;
-      if (!isCached) setLoading(true);
+      if (!isCached && !forceRefresh) setLoading(true);
       const response = await withCache(
         cacheKey,
         CACHE_TTL.MONTHLY_ATTENDANCE,
@@ -346,8 +347,8 @@ const Attendance = () => {
         date: formatDate(record.date || record.attendanceDate),
         inTime: record.inTime || record.checkInTime || record.clockIn || null,
         outTime: record.outTime || record.checkOutTime || record.clockOut || null,
-        inPhotoUrl: record.inPhotoUrl || null,
-        outPhotoUrl: record.outPhotoUrl || null,
+        inPhotoUrl: record.inPhotoUrl || record.checkInPhotoUrl || null,
+        outPhotoUrl: record.outPhotoUrl || record.checkOutPhotoUrl || null,
         status: record.status || record.attendanceStatus || "present",
         isHoliday: record.isHoliday || false,
         isSunday: record.isSunday || false,
@@ -474,8 +475,8 @@ const Attendance = () => {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <AdminTabHeader title="Attendance" />
+    <SmoothScreenWrapper style={[styles.container, { backgroundColor: colors.background }]}>
+      <Header title="Attendance" showBack={false} />
       <View style={styles.cardWrapper}>
         <View
           style={[
@@ -483,39 +484,20 @@ const Attendance = () => {
             { backgroundColor: colors.white, borderColor: colors.border },
           ]}
         >
-          <View
-            style={[
-              styles.triangle,
-              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
-            ]}
-          />
-          <View
-            style={[
-              styles.triangle2,
-              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
-            ]}
-          />
-          <View
-            style={[
-              styles.triangle3,
-              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
-            ]}
-          />
-          <View
-            style={[
-              styles.triangle4,
-              { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
-            ]}
-          />
+          <View style={[styles.blobTop, { backgroundColor: colors.primary + "10" }]} />
+          <View style={[styles.blobBottom, { backgroundColor: colors.primary + "08" }]} />
+          <View style={[styles.blobAccent, { backgroundColor: colors.primary + "18" }]} />
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <View
                 style={[
                   styles.progressCircle,
-                  { backgroundColor: colors.primary, borderColor: colors.primary },
+                  { backgroundColor: colors.background, borderColor: colors.primary },
                 ]}
               >
-                <Text style={styles.progressText}>{attendancePercentage}%</Text>
+                <Text style={[styles.progressText, { color: colors.text }]}>
+                  {attendancePercentage}%
+                </Text>
               </View>
               <Text style={[styles.statLabel, { color: colors.text }]}>
                 Attendance Rate
@@ -809,7 +791,7 @@ const Attendance = () => {
       </View>
       <PhotoModal />
       <CustomDialog isVisible={dialogVisible} type={dialogType as any} title={dialogTitle} message={dialogMessage} buttons={dialogButtons} onCancel={() => setDialogVisible(false)} />
-    </View>
+    </SmoothScreenWrapper>
   );
 };
 
@@ -836,64 +818,29 @@ const styles = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
   },
-  triangle: {
+  blobTop: {
     position: "absolute",
-    top: 10,
-    left: 10,
-    width: 0,
-    height: 0,
-    borderStyle: "solid",
-    borderTopWidth: moderateScale(60),
-    borderRightWidth: moderateScale(60),
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-    borderTopColor: "#E1F4FF",
-    borderRightColor: "transparent",
+    top: -20,
+    right: -20,
+    width: moderateScale(100),
+    height: moderateScale(100),
+    borderRadius: moderateScale(50),
   },
-  triangle2: {
+  blobBottom: {
     position: "absolute",
-    bottom: 10,
-    right: 10,
-    width: 0,
-    height: 0,
-    borderStyle: "solid",
-    borderTopWidth: moderateScale(60),
-    borderRightWidth: moderateScale(60),
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-    borderTopColor: "#E1F4FF",
-    borderRightColor: "transparent",
-    transform: [{ rotate: "180deg" }],
+    bottom: -30,
+    left: -30,
+    width: moderateScale(130),
+    height: moderateScale(130),
+    borderRadius: moderateScale(65),
   },
-  triangle3: {
+  blobAccent: {
     position: "absolute",
-    bottom: 10,
-    left: 10,
-    width: 0,
-    height: 0,
-    borderStyle: "solid",
-    borderTopWidth: moderateScale(60),
-    borderRightWidth: moderateScale(60),
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-    borderTopColor: "#E1F4FF",
-    borderRightColor: "transparent",
-    transform: [{ rotate: "270deg" }],
-  },
-  triangle4: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    width: 0,
-    height: 0,
-    borderStyle: "solid",
-    borderTopWidth: moderateScale(60),
-    borderRightWidth: moderateScale(60),
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-    borderTopColor: "#E1F4FF",
-    borderRightColor: "transparent",
-    transform: [{ rotate: "90deg" }],
+    top: moderateScale(20),
+    left: moderateScale(40),
+    width: moderateScale(8),
+    height: moderateScale(8),
+    borderRadius: moderateScale(4),
   },
   overviewHeader: {
     flexDirection: "row",
@@ -934,20 +881,17 @@ const styles = StyleSheet.create({
     height: verticalScale(50),
   },
   progressCircle: {
-    width: moderateScale(60),
-    height: moderateScale(60),
-    borderRadius: moderateScale(30),
-    backgroundColor: "#035F91",
+    width: moderateScale(64),
+    height: moderateScale(64),
+    borderRadius: moderateScale(32),
     justifyContent: "center",
     alignItems: "center",
     marginBottom: verticalScale(8),
-    borderWidth: 2,
-    borderColor: "#026D94",
+    borderWidth: 5,
   },
   progressText: {
-    fontSize: moderateScale(16),
-    fontWeight: "600",
-    color: "#FFFFFF",
+    fontSize: moderateScale(15),
+    fontWeight: "700",
   },
   verticalDivider: {
     width: 1,

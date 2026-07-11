@@ -12,13 +12,22 @@ import {
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import { darkTheme, lightTheme } from "../constants/colors";
 
-const MessagaDetails = () => {
+const MessageDetails = () => {
   const { message } = useLocalSearchParams();
   const router = useRouter();
   const colorScheme = useColorScheme() ?? "light";
   const colors = colorScheme === "dark" ? darkTheme : lightTheme;
 
-  const msg = typeof message === "string" ? JSON.parse(message) : message;
+  let msg: any = {};
+  if (typeof message === "string") {
+    try {
+      msg = JSON.parse(message);
+    } catch {
+      msg = {};
+    }
+  } else {
+    msg = message || {};
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -62,7 +71,7 @@ const MessagaDetails = () => {
   );
 };
 
-export default MessagaDetails;
+export default MessageDetails;
 
 const styles = StyleSheet.create({
   container: {

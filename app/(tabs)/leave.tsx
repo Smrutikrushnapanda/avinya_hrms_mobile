@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import AdminTabHeader from "app/components/AdminTabHeader";
+import Header from "app/components/Header";
 import LeaveSkeleton from "app/Loaders/LeaveSkeleton";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -20,6 +20,7 @@ import useAuthStore from "../../store/useUserStore";
 import { darkTheme, lightTheme } from "../constants/colors";
 import type { AppTheme } from "../constants/colors";
 import { CACHE_TTL, withCache, invalidateCacheByPrefix, getCached } from "utils/apiCache";
+import SmoothScreenWrapper from "../components/SmoothScreenWrapper";
 
 const Leave = () => {
   const colorScheme = useColorScheme() ?? "light";
@@ -280,10 +281,10 @@ const Leave = () => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <SmoothScreenWrapper style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Main Content */}
       <View style={styles.contentWrapper}>
-        <AdminTabHeader title="Leave" />
+        <Header title="Leave" showBack={false} />
 
         {/* Summary Card */}
         <View style={styles.cardWrapper}>
@@ -293,30 +294,9 @@ const Leave = () => {
               { backgroundColor: colors.white, borderColor: colors.border },
             ]}
           >
-            <View
-              style={[
-                styles.triangle,
-                { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
-              ]}
-            />
-            <View
-              style={[
-                styles.triangle2,
-                { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
-              ]}
-            />
-            <View
-              style={[
-                styles.triangle3,
-                { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
-              ]}
-            />
-            <View
-              style={[
-                styles.triangle4,
-                { borderTopColor: isDarkMode ? "rgba(10,132,183,0.22)" : "#E1F4FF" },
-              ]}
-            />
+            <View style={[styles.blobTop, { backgroundColor: colors.primary + "10" }]} />
+            <View style={[styles.blobBottom, { backgroundColor: colors.primary + "08" }]} />
+            <View style={[styles.blobAccent, { backgroundColor: colors.primary + "18" }]} />
             <View style={styles.contentContainer}>
               {leaveBalances.length === 0 && (
                 <View style={styles.emptyState}>
@@ -331,14 +311,10 @@ const Leave = () => {
                     <View
                       style={[
                         styles.iconWrapper,
-                        {
-                          backgroundColor: isDarkMode
-                            ? "rgba(33,150,243,0.22)"
-                            : "#E3F2FD",
-                        },
+                        { backgroundColor: colors.primary + "22" },
                       ]}
                     >
-                      <Feather name="calendar" size={20} color="#2196F3" />
+                      <Feather name="calendar" size={20} color={colors.primary} />
                     </View>
                     <View style={styles.textContainer}>
                       <Text style={[styles.typeText, { color: colors.text }]}>
@@ -526,7 +502,7 @@ const Leave = () => {
               </View>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.fabActionBox, { backgroundColor: "#2196F3" }]}
+              style={[styles.fabActionBox, { backgroundColor: colors.primary }]}
               onPress={handleAddLeave}
             >
               <View style={styles.fabActionContent}>
@@ -545,6 +521,7 @@ const Leave = () => {
           style={[
             styles.fab,
             {
+              backgroundColor: colors.primary,
               transform: [
                 { translateX: -moderateScale(28) }, // Same positioning as TimeSlips
                 { translateY: bounceValue }, // Bounce animation
@@ -575,7 +552,7 @@ const Leave = () => {
         </Animated.View>
       </View>
       <CustomDialog isVisible={dialogVisible} type={dialogType as any} title={dialogTitle} message={dialogMessage} buttons={dialogButtons} onCancel={() => setDialogVisible(false)} />
-    </View>
+    </SmoothScreenWrapper>
   );
 };
 
@@ -724,64 +701,29 @@ const styles = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
   },
-  triangle: {
+  blobTop: {
     position: "absolute",
-    top: 10,
-    left: 10,
-    width: 0,
-    height: 0,
-    borderStyle: "solid",
-    borderTopWidth: moderateScale(40),
-    borderRightWidth: moderateScale(40),
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-    borderTopColor: "#E1F4FF",
-    borderRightColor: "transparent",
+    top: -20,
+    right: -20,
+    width: moderateScale(100),
+    height: moderateScale(100),
+    borderRadius: moderateScale(50),
   },
-  triangle2: {
+  blobBottom: {
     position: "absolute",
-    bottom: 10,
-    right: 10,
-    width: 0,
-    height: 0,
-    borderStyle: "solid",
-    borderTopWidth: moderateScale(40),
-    borderRightWidth: moderateScale(40),
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-    borderTopColor: "#E1F4FF",
-    borderRightColor: "transparent",
-    transform: [{ rotate: "180deg" }],
+    bottom: -30,
+    left: -30,
+    width: moderateScale(130),
+    height: moderateScale(130),
+    borderRadius: moderateScale(65),
   },
-  triangle3: {
+  blobAccent: {
     position: "absolute",
-    bottom: 10,
-    left: 10,
-    width: 0,
-    height: 0,
-    borderStyle: "solid",
-    borderTopWidth: moderateScale(40),
-    borderRightWidth: moderateScale(40),
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-    borderTopColor: "#E1F4FF",
-    borderRightColor: "transparent",
-    transform: [{ rotate: "270deg" }],
-  },
-  triangle4: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    width: 0,
-    height: 0,
-    borderStyle: "solid",
-    borderTopWidth: moderateScale(40),
-    borderRightWidth: moderateScale(40),
-    borderBottomWidth: 0,
-    borderLeftWidth: 0,
-    borderTopColor: "#E1F4FF",
-    borderRightColor: "transparent",
-    transform: [{ rotate: "90deg" }],
+    top: moderateScale(20),
+    left: moderateScale(40),
+    width: moderateScale(8),
+    height: moderateScale(8),
+    borderRadius: moderateScale(4),
   },
   contentContainer: {
     zIndex: 2,

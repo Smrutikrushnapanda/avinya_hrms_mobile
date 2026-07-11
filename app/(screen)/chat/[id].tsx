@@ -24,13 +24,12 @@ import { WebView } from "react-native-webview";
 import { darkTheme, lightTheme } from "../../constants/colors";
 import { horizontalScale, moderateScale, verticalScale } from "utils/metrics";
 import useAuthStore from "../../../store/useUserStore";
-import { getChatMessages, getEmployees, sendChatMessage } from "../../../api/api";
+import { getChatMessages, getEmployees, sendChatMessage, markChatRead } from "../../../api/api";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { io, Socket } from "socket.io-client";
+import { socketURL as SOCKET_URL } from "utils/apiConfig";
 
-const SOCKET_URL =
-  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinyahrms.duckdns.org";
 const JITSI_DOMAIN = process.env.EXPO_PUBLIC_JITSI_DOMAIN || "meet.jit.si";
 const MEETING_STORE_KEY = "active_meetings";
 
@@ -122,8 +121,11 @@ const ChatScreen = () => {
 
   const loadMessages = useCallback(async () => {
     if (!conversationId) return;
-    const res = await getChatMessages(conversationId);
-    const data = res.data ?? [];
+    const [msgRes] = await Promise.all([
+      getChatMessages(conversationId, { limit: 200 }),
+      markChatRead(conversationId).catch(() => undefined),
+    ]);
+    const data = msgRes.data ?? [];
     const list = Array.isArray(data) ? data : [];
     setMessages(sortByCreatedAt(list));
   }, [conversationId, sortByCreatedAt]);
@@ -404,6 +406,7 @@ const ChatScreen = () => {
         return upsertMessage(withoutTemp, msg);
       });
       setText("");
+      setMentionSearch("");
       setAttachments([]);
       setShowAttachMenu(false);
       setShowMentionList(false);

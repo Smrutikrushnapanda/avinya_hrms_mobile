@@ -152,7 +152,7 @@ const UpcomingHoliday = () => {
           styles.holidayCard,
           {
             backgroundColor: colors.background,
-            borderColor: item.isOptional ? "#FF8C00" : "#4A90E2", // Blue for public, orange for restricted
+            borderColor: item.isOptional ? "#FF8C00" : colors.primary, // Blue for public, orange for restricted
             borderWidth: 1,
           },
         ]}
@@ -172,10 +172,10 @@ const UpcomingHoliday = () => {
         <View style={styles.cardHeader}>
           <View style={styles.leftSection}>
             <View style={styles.dateBox}>
-              <Text style={[styles.dayText, { color: item.isOptional ? "#FF8C00" : "#4A90E2" }]}>
+              <Text style={[styles.dayText, { color: item.isOptional ? "#FF8C00" : colors.primary }]}>
                 {day}
               </Text>
-              <View style={[styles.monthBadge, { backgroundColor: item.isOptional ? "#FF8C00" : "#4A90E2" }]}>
+              <View style={[styles.monthBadge, { backgroundColor: item.isOptional ? "#FF8C00" : colors.primary }]}>
                 <Text style={styles.monthText}>{month}</Text>
               </View>
             </View>
@@ -186,13 +186,13 @@ const UpcomingHoliday = () => {
               <Ionicons
                 name={item.isOptional ? "calendar" : "calendar"}
                 size={12}
-                color={item.isOptional ? "#FF8C00" : "#4A90E2"}
+                color={item.isOptional ? "#FF8C00" : colors.primary}
                 style={styles.badgeIcon}
               />
               <Text
                 style={[
                   styles.typeText,
-                  { color: item.isOptional ? "#FF8C00" : "#4A90E2" },
+                  { color: item.isOptional ? "#FF8C00" : colors.primary },
                 ]}
               >
                 {item.isOptional ? "Restricted" : "Public Holiday"}

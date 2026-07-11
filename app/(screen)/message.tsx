@@ -19,9 +19,7 @@ import { getInboxMessages, markMessageRead } from "../../api/api";
 import useAuthStore from "../../store/useUserStore";
 import { io, Socket } from "socket.io-client";
 import useMessageStore from "../../store/useMessageStore";
-
-const SOCKET_URL =
-  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinyahrms.duckdns.org";
+import { socketURL as SOCKET_URL } from "utils/apiConfig";
 
 type MessageItem = {
   id: string;
@@ -129,7 +127,7 @@ const Message = () => {
   const handleMessagePress = (item: MessageItem) => {
     handleRead(item.id);
     router.push({
-      pathname: "/(screen)/MessagaDetails",
+      pathname: "/(screen)/MessageDetails",
       params: {
         message: JSON.stringify(item),
       },

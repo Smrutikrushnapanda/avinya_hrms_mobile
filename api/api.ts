@@ -1,14 +1,8 @@
 import axios from "axios";
 import { router } from "expo-router";
+import { apiBaseURL } from "utils/apiConfig";
 
 const getAuthStore = () => require("../store/useUserStore").default;
-
-const cloudFallbackURL = "https://avinyahrms.duckdns.org";
-const localFallbackURL = "http://10.0.2.2:8080";
-const envOverrideURL =
-  process.env.EXPO_PUBLIC_API_BASE_URL || process.env.EXPO_PUBLIC_LOCAL_API_BASE_URL;
-// Default to hosted backend when no env override is provided.
-const apiBaseURL = envOverrideURL || cloudFallbackURL;
 
 
 // Axios instance configuration
@@ -87,7 +81,7 @@ export const getOrganization = (organizationId: string) => {
 
 // ✅ Organization Plan API - Get active pricing plan by organization ID
 export const getOrganizationPlan = (organizationId: string) => {
-  return api.get(`/pricing/organizations/${organizationId}/plan`);
+  return api.get(`/api/pricing/organizations/${organizationId}/plan`);
 };
 
 
@@ -134,15 +128,6 @@ export const logAttendance = async (data: {
     }
 
     console.log("✅ Image URI validation passed");
-
-    // Check network connectivity before submission
-    try {
-      const networkTest = await api.get("/");
-      console.log("✅ Network test successful");
-    } catch (networkError: any) {
-      console.error("❌ Network test failed:", networkError.message);
-      throw new Error("Network connectivity issue. Please check your internet connection.");
-    }
 
     // Create FormData for file upload
     const formData = new FormData();
@@ -431,6 +416,8 @@ export const sendChatMessage = (conversationId: string, data: any) =>
   api.post(`/chat/conversations/${conversationId}/messages`, data, {
     headers: { "Content-Type": "multipart/form-data" },
   });
+export const markChatRead = (conversationId: string) =>
+  api.post(`/chat/conversations/${conversationId}/read`);
 export const getEmployees = (organizationId: string) =>
   api.get("/employees", { params: { organizationId } });
 

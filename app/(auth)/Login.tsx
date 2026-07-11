@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage"; // Import AsyncStorage
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -72,7 +73,7 @@ const Login = () => {
         if (savedRememberMe === "true") {
           setRememberMe(true);
           const savedUserId = await AsyncStorage.getItem("lastUserId");
-          const savedPassword = await AsyncStorage.getItem("lastPassword");
+          const savedPassword = await SecureStore.getItemAsync("lastPassword");
           if (savedUserId) setUserId(savedUserId);
           if (savedPassword) setPassword(savedPassword);
         }
@@ -113,7 +114,7 @@ const Login = () => {
     setIsLoading(true);
     try {
       const response = await login({
-        userName: userId,
+        userName: userId.trim(),
         password: password,
       });
 
@@ -125,12 +126,12 @@ const Login = () => {
       // Save credentials if "Remember Me" is checked
       if (rememberMe) {
         await AsyncStorage.setItem("lastUserId", userId);
-        await AsyncStorage.setItem("lastPassword", password);
+        await SecureStore.setItemAsync("lastPassword", password);
         await AsyncStorage.setItem("rememberMe", "true");
       } else {
         // Clear saved credentials if "Remember Me" is unchecked
         await AsyncStorage.removeItem("lastUserId");
-        await AsyncStorage.removeItem("lastPassword");
+        await SecureStore.deleteItemAsync("lastPassword");
         await AsyncStorage.setItem("rememberMe", "false");
       }
 
@@ -201,6 +202,7 @@ const Login = () => {
                 onChangeText={setUserId}
                 placeholder=""
                 autoCapitalize="none"
+                autoCorrect={false}
                 returnKeyType="next"
                 onSubmitEditing={() => {
                   // Focus next input if you have a ref

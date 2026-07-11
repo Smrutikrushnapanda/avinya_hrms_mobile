@@ -2,7 +2,7 @@ import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useMemo, useState } from "react";
 import { Appearance, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { AlertNotificationRoot } from "react-native-alert-notification";
+import AlertProvider from "./components/AlertProvider";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -10,9 +10,7 @@ import { io, Socket } from "socket.io-client";
 import useAuthStore from "../store/useUserStore";
 import { getEmployees } from "../api/api";
 import { isThemePreference, THEME_PREFERENCE_KEY } from "utils/themePreference";
-
-const SOCKET_URL =
-  process.env.EXPO_PUBLIC_SOCKET_URL || "https://avinyahrms.duckdns.org";
+import { socketURL as SOCKET_URL } from "utils/apiConfig";
 
 export default function RootLayout() {
   const router = useRouter();
@@ -31,7 +29,9 @@ export default function RootLayout() {
       try {
         const savedTheme = await AsyncStorage.getItem(THEME_PREFERENCE_KEY);
         if (isThemePreference(savedTheme)) {
-          Appearance.setColorScheme(savedTheme);
+          if (typeof Appearance.setColorScheme === "function") {
+            Appearance.setColorScheme(savedTheme);
+          }
           return;
         }
       } catch {
@@ -39,7 +39,9 @@ export default function RootLayout() {
       }
 
       // Preserve existing app behavior when no preference is saved.
-      Appearance.setColorScheme("light");
+      if (typeof Appearance.setColorScheme === "function") {
+        Appearance.setColorScheme("light");
+      }
     };
 
     applySavedTheme();
@@ -115,7 +117,7 @@ export default function RootLayout() {
   }, [accessToken, employeeMap]);
 
   return (
-    <AlertNotificationRoot>
+    <AlertProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <StatusBar style="light" translucent={true} />
@@ -163,13 +165,13 @@ export default function RootLayout() {
             <Stack
               screenOptions={{
                 headerShown: false,
-                animation: "fade",
+                animation: "slide_from_right",
               }}
             />
           </SafeAreaView>
         </SafeAreaProvider>
       </GestureHandlerRootView>
-    </AlertNotificationRoot>
+    </AlertProvider>
   );
 }
 
